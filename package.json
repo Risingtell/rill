@@ -6,6 +6,7 @@
   "scripts": {
     "compile": "hardhat compile",
     "test": "hardhat test",
+    "test:services": "tsx --test test-services/*.test.ts",
     "typecheck:services": "tsc --noEmit -p tsconfig.services.json"
   },
   "keywords": [
@@ -19,6 +20,7 @@
   "license": "MIT",
   "type": "commonjs",
   "dependencies": {
+    "@flarenetwork/smart-accounts-encoder": "^0.1.2",
     "@x402/core": "^2.21.0",
     "@x402/evm": "^2.21.0",
     "@x402/express": "^2.21.0",
