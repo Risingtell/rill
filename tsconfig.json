@@ -8,6 +8,6 @@
     "resolveJsonModule": true,
     "outDir": "dist"
   },
-  "include": ["./hardhat.config.ts", "./test", "./scripts", "./packages", "./apps"],
-  "exclude": ["node_modules", "dist"]
+  "include": ["./hardhat.config.ts", "./test", "./scripts"],
+  "exclude": ["node_modules", "dist", "packages", "apps"]
 }

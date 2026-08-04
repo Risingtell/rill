@@ -5,13 +5,25 @@
   "private": true,
   "scripts": {
     "compile": "hardhat compile",
-    "test": "hardhat test"
+    "test": "hardhat test",
+    "typecheck:services": "tsc --noEmit -p tsconfig.services.json"
   },
-  "keywords": ["flare", "fxrp", "x402", "eip-3009", "fassets"],
+  "keywords": [
+    "flare",
+    "fxrp",
+    "x402",
+    "eip-3009",
+    "fassets"
+  ],
   "author": "Oluwasogo \"Israel\" Ajala (Rising Technology)",
   "license": "MIT",
   "type": "commonjs",
   "dependencies": {
+    "@x402/core": "^2.21.0",
+    "@x402/evm": "^2.21.0",
+    "@x402/express": "^2.21.0",
+    "express": "^4.22.2",
+    "meter402": "^0.2.0",
     "viem": "^2.55.10"
   },
   "devDependencies": {
@@ -21,6 +33,7 @@
     "dotenv": "^17.4.2",
     "hardhat": "^2.29.0",
     "ts-node": "^10.9.2",
+    "tsx": "^4.23.5",
     "typescript": "^5.9.3"
   }
 }
