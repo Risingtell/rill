@@ -1,0 +1,193 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Rill — live console</title>
+<style>
+  :root {
+    --bg: #0a0b0d;
+    --panel: #111318;
+    --line: #24272e;
+    --fg: #eef0f3;
+    --dim: #8a8f98;
+    --accent: #5be6a8;
+    --warn: #e6b85b;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
+  header {
+    border-bottom: 1px solid var(--line);
+    padding: 28px 40px;
+  }
+  header h1 {
+    margin: 0 0 6px;
+    font-size: 22px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  header p {
+    margin: 0;
+    color: var(--dim);
+    font-size: 13px;
+  }
+  main {
+    max-width: 1280px;
+    margin: 0 auto;
+    padding: 32px 40px 80px;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 20px;
+  }
+  .stat {
+    border: 1px solid var(--line);
+    background: var(--panel);
+    padding: 20px;
+  }
+  .stat .label {
+    color: var(--dim);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-bottom: 10px;
+  }
+  .stat .value {
+    font-size: 28px;
+    font-weight: 600;
+  }
+  .stat .value.accent { color: var(--accent); }
+  .full { grid-column: 1 / -1; }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+  th, td {
+    text-align: left;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--line);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 220px;
+  }
+  th {
+    color: var(--dim);
+    text-transform: uppercase;
+    font-size: 10px;
+    letter-spacing: 0.08em;
+  }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .mode {
+    display: inline-block;
+    padding: 2px 8px;
+    border: 1px solid var(--line);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  .mode.live { color: var(--accent); border-color: var(--accent); }
+  .mode.mock { color: var(--warn); border-color: var(--warn); }
+  .empty { color: var(--dim); padding: 20px 0; font-size: 13px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Rill — live console</h1>
+  <p>Pay-per-second XRP/USD feed, settled in real FXRP through the FXRP3009 EIP-3009 shim.</p>
+</header>
+<main>
+  <div class="stat">
+    <div class="label">XRP / USD (FTSOv2)</div>
+    <div class="value accent" id="price">—</div>
+  </div>
+  <div class="stat">
+    <div class="label">Settlements</div>
+    <div class="value" id="settlements">—</div>
+  </div>
+  <div class="stat">
+    <div class="label">Total paid</div>
+    <div class="value" id="totalPaid">—</div>
+  </div>
+  <div class="stat">
+    <div class="label">Network</div>
+    <div class="value" id="network">—</div>
+  </div>
+  <div class="stat">
+    <div class="label">Seconds streamed</div>
+    <div class="value" id="seconds">—</div>
+  </div>
+  <div class="stat">
+    <div class="label">Unique agents</div>
+    <div class="value" id="agents">—</div>
+  </div>
+
+  <div class="stat full">
+    <div class="label">Recent settlements</div>
+    <table>
+      <thead>
+        <tr><th>Agent</th><th>Amount</th><th>Seconds</th><th>Tx</th><th>When</th></tr>
+      </thead>
+      <tbody id="recent"></tbody>
+    </table>
+    <div class="empty" id="empty" style="display:none">No settlements yet — run apps/demo/agent.ts to stream a session.</div>
+  </div>
+</main>
+<script>
+  function short(addr) {
+    if (!addr) return "";
+    return addr.length > 14 ? addr.slice(0, 8) + "…" + addr.slice(-4) : addr;
+  }
+
+  async function refresh() {
+    try {
+      const [impactRes, priceRes] = await Promise.all([fetch("/impact"), fetch("/price")]);
+      const impact = await impactRes.json();
+      const price = priceRes.ok ? await priceRes.json() : null;
+
+      document.getElementById("price").textContent = price ? "$" + price.usd.toFixed(4) : "—";
+      document.getElementById("settlements").textContent = impact.totals.settlements;
+      document.getElementById("totalPaid").textContent = impact.totals.totalPaid + " " + (impact.totals.asset || "");
+      document.getElementById("network").textContent = impact.network;
+      document.getElementById("network").className = "value " + (impact.mock ? "" : "accent");
+      document.getElementById("seconds").textContent = impact.totals.secondsStreamed.toFixed(2) + "s";
+      document.getElementById("agents").textContent = impact.totals.uniqueAgents;
+
+      const tbody = document.getElementById("recent");
+      const empty = document.getElementById("empty");
+      tbody.innerHTML = "";
+      if (impact.recent.length === 0) {
+        empty.style.display = "block";
+      } else {
+        empty.style.display = "none";
+        for (const e of impact.recent) {
+          const tr = document.createElement("tr");
+          const txCell = e.explorerUrl
+            ? `<a href="${e.explorerUrl}" target="_blank" rel="noopener">${short(e.txHash)}</a>`
+            : short(e.txHash) || "(mock)";
+          tr.innerHTML = `
+            <td>${short(e.agent)}</td>
+            <td>${e.amount} ${e.asset}</td>
+            <td>${e.seconds.toFixed(3)}</td>
+            <td>${txCell}</td>
+            <td>${new Date(e.settledAt).toLocaleTimeString()}</td>
+          `;
+          tbody.appendChild(tr);
+        }
+      }
+    } catch (err) {
+      console.error("refresh failed", err);
+    }
+  }
+
+  refresh();
+  setInterval(refresh, 2000);
+</script>
+</body>
+</html>
