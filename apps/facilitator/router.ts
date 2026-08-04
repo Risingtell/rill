@@ -11,7 +11,10 @@
  */
 
 import { Router, type Request, type Response } from "express";
+import type { Hex } from "viem";
 import { createFxrp3009Facilitator, type Fxrp3009Facilitator } from "../../shared/fxrp3009-facilitator.js";
+import { FXRP_ADDRESS } from "../../shared/flare-chains.js";
+import { sponsorPermit } from "../../shared/erc2612.js";
 
 export interface FacilitatorRouterOptions {
   /** Facilitator's gas-paying key. */
@@ -112,6 +115,34 @@ export function createFacilitatorRouter(opts: FacilitatorRouterOptions): { route
         transaction: "",
         network: paymentRequirements?.network ?? fac.network,
       });
+    }
+  });
+
+  /**
+   * Sponsor the one-time EIP-2612 permit that opens a session. The payer signs
+   * off-chain (free); this relays it on-chain using the facilitator's own gas, exactly
+   * like /settle relays a tick authorization. Always targets real FXRP for this
+   * facilitator's configured chain — never a client-supplied token address.
+   */
+  router.post("/sponsor-permit", async (req: Request, res: Response) => {
+    try {
+      const { owner, value, deadline, v, r, s } = req.body ?? {};
+      if (!owner || !value || !deadline || v === undefined || !r || !s) {
+        return res.status(400).json({ success: false, errorMessage: "owner, value, deadline, v, r, s are required" });
+      }
+      const txHash = await sponsorPermit(fac.signer, {
+        token: FXRP_ADDRESS[fac.chainId],
+        owner: owner as Hex,
+        spender: opts.shimAddress as Hex,
+        value: String(value),
+        deadline: String(deadline),
+        v: Number(v),
+        r: r as Hex,
+        s: s as Hex,
+      });
+      res.json({ success: true, transaction: txHash, network: fac.network });
+    } catch (err) {
+      res.status(400).json({ success: false, errorMessage: (err as Error).message });
     }
   });
 
