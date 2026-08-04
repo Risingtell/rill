@@ -13,18 +13,15 @@
  *
  * verify()/settle() are @x402/evm's real ExactEvmScheme implementation, not a
  * hand-rolled check — the same code a stock x402 facilitator runs against USDC on
- * Base runs here against FXRP3009 on Flare. That is the whole thesis: SPEC.md
- * section 2.
+ * Base runs here against FXRP3009 on Flare (see shared/fxrp3009-facilitator.ts).
+ * That is the whole thesis: SPEC.md section 2.
  */
 
-import { createPublicClient, createWalletClient, http, type Hex } from "viem";
-import { privateKeyToAccount } from "viem/accounts";
-import { x402Facilitator } from "@x402/core/facilitator";
-import { registerExactEvmScheme } from "@x402/evm/exact/facilitator";
-import type { FacilitatorEvmSigner } from "@x402/evm";
+import type { Hex } from "viem";
 import type { PaymentPayload, PaymentRequirements } from "@x402/core/types";
 import type { SettlementProvider, SettlementResult, TickQuote } from "meter402";
-import { coston2, flare, COSTON2_CAIP2, FLARE_CAIP2, explorerTxUrl } from "../../shared/flare-chains.js";
+import { explorerTxUrl } from "../../shared/flare-chains.js";
+import { createFxrp3009Facilitator, type Fxrp3009Facilitator } from "../../shared/fxrp3009-facilitator.js";
 
 /** The agent's signed EIP-3009 authorization for one specific tick. */
 export interface PendingAuthorization {
@@ -47,11 +44,6 @@ export interface Fxrp3009SettlementProviderOptions {
   rpcUrl?: string;
 }
 
-function normalizeKey(key: string): Hex {
-  const trimmed = key.trim();
-  return (trimmed.startsWith("0x") ? trimmed : `0x${trimmed}`) as Hex;
-}
-
 /** True when a facilitator key is configured, so real settlement is possible. */
 export function facilitatorKeyConfigured(): boolean {
   return Boolean(process.env.RILL_FACILITATOR_KEY);
@@ -63,36 +55,17 @@ export class Fxrp3009SettlementProvider implements SettlementProvider {
   readonly facilitatorAddress: Hex;
 
   private readonly pending = new Map<string, PendingAuthorization>();
-  private readonly facilitator = new x402Facilitator();
+  private readonly fac: Fxrp3009Facilitator;
   private readonly shimAddress: Hex;
-  private readonly chainId: 114 | 14;
 
   constructor(opts: Fxrp3009SettlementProviderOptions) {
     const key = opts.facilitatorPrivateKey ?? process.env.RILL_FACILITATOR_KEY;
     if (!key) throw new Error("No facilitator key: set RILL_FACILITATOR_KEY to settle FXRP3009 authorizations.");
 
-    const chain = opts.chainId === 114 ? coston2 : flare;
-    const account = privateKeyToAccount(normalizeKey(key));
-    const transport = http(opts.rpcUrl);
-    const publicClient = createPublicClient({ chain, transport });
-    const walletClient = createWalletClient({ account, chain, transport });
-
-    this.chainId = opts.chainId;
-    this.network = opts.chainId === 114 ? COSTON2_CAIP2 : FLARE_CAIP2;
+    this.fac = createFxrp3009Facilitator({ privateKey: key, chainId: opts.chainId, rpcUrl: opts.rpcUrl });
+    this.network = this.fac.network;
     this.shimAddress = opts.shimAddress;
-    this.facilitatorAddress = account.address;
-
-    const signer: FacilitatorEvmSigner = {
-      getAddresses: () => [account.address],
-      readContract: (args) => publicClient.readContract(args as never),
-      verifyTypedData: (args) => publicClient.verifyTypedData(args as never),
-      writeContract: (args) => walletClient.writeContract({ ...args, chain, account } as never),
-      sendTransaction: (args) => walletClient.sendTransaction({ ...args, chain, account } as never),
-      waitForTransactionReceipt: (args) => publicClient.waitForTransactionReceipt(args),
-      getCode: (args) => publicClient.getCode(args),
-    };
-
-    registerExactEvmScheme(this.facilitator, { networks: this.network as never, signer });
+    this.facilitatorAddress = this.fac.facilitatorAddress;
   }
 
   /** Stash the agent's signed authorization for `sessionId`'s next tick. */
@@ -141,12 +114,12 @@ export class Fxrp3009SettlementProvider implements SettlementProvider {
       },
     };
 
-    const verified = await this.facilitator.verify(payload, requirements);
+    const verified = await this.fac.facilitator.verify(payload, requirements);
     if (!verified.isValid) {
       throw new Error(`FXRP3009 authorization failed verification: ${verified.invalidReason ?? "unknown"}`);
     }
 
-    const settled = await this.facilitator.settle(payload, requirements);
+    const settled = await this.fac.facilitator.settle(payload, requirements);
     if (!settled.success) {
       throw new Error(
         `FXRP3009 settlement failed: ${settled.errorReason ?? "unknown"} ${settled.errorMessage ?? ""}`.trim()
@@ -155,7 +128,7 @@ export class Fxrp3009SettlementProvider implements SettlementProvider {
 
     return {
       txHash: settled.transaction,
-      explorerUrl: explorerTxUrl(this.chainId, settled.transaction),
+      explorerUrl: explorerTxUrl(this.fac.chainId, settled.transaction),
       network: this.network,
     };
   }
