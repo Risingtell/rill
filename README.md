@@ -6,6 +6,8 @@ Flare Summer Signal, Track 1 (Interoperable Asset Products). Full architecture r
 
 **Live on Coston2.** `FXRP3009` is deployed at [`0xb1a5826C3Ae8afDfB724D0DBaEEbAa4841605B86`](https://coston2-explorer.flare.network/address/0xb1a5826C3Ae8afDfB724D0DBaEEbAa4841605B86). A real permit plus a real EIP-3009 authorization have already moved real FXRP to a fresh, previously-empty address, in [transaction `0xe905be786b250d1109667084448a901c769fd7abd282040d4c944b6ffb23ab90`](https://coston2-explorer.flare.network/tx/0xe905be786b250d1109667084448a901c769fd7abd282040d4c944b6ffb23ab90). Reproduce it yourself with `npx hardhat run scripts/prove-live-settlement.ts --network coston2`.
 
+**The facilitator is live too**, at [rill-facilitator.vercel.app](https://rill-facilitator.vercel.app), speaking standard x402 `exact` against the deployed shim above.
+
 ## The gap, verified on-chain
 
 Flare's own x402 guide ships against **MockUSDT0**, not FXRP, because FXRP doesn't implement EIP-3009's `transferWithAuthorization`. We scanned the deployed proxy on both Coston2 and mainnet directly rather than trusting the docs:
@@ -51,6 +53,7 @@ packages/provider/   Fxrp3009SettlementProvider for meter402
 apps/facilitator/    standalone x402 facilitator HTTP service
 apps/demo/           metered demo server, zero-gas agent script, live console
 test-services/       node:test suite for the shared/packages/apps layer
+deploy/facilitator/  package.json template for the standalone Vercel deploy of apps/facilitator
 ```
 
 ## Running it
@@ -80,6 +83,22 @@ RILL_SHIM_ADDRESS=0xb1a5826C3Ae8afDfB724D0DBaEEbAa4841605B86 \
 ```
 
 For live Coston2 settlement through the demo app, set `RILL_FACILITATOR_KEY`, `RILL_SHIM_ADDRESS=0xb1a5826C3Ae8afDfB724D0DBaEEbAa4841605B86`, and `RILL_PAYEE_ADDRESS` before starting `apps/demo/server.ts` and `apps/facilitator/index.ts`.
+
+## Deploying the facilitator
+
+`apps/facilitator` is stateless (no per-session memory), which makes it Vercel-safe. `apps/demo` is not: it holds open sessions and pending quotes in memory, so it needs a host that runs one persistent process (Render, Fly) rather than serverless functions that can cold-start into a fresh, empty instance mid-session.
+
+To deploy the facilitator to Vercel:
+
+```bash
+npm run build:facilitator          # bundles apps/facilitator into deploy/facilitator/index.js
+cd deploy/facilitator
+vercel link --yes --project rill-facilitator
+vercel env add RILL_FACILITATOR_KEY production
+vercel env add RILL_SHIM_ADDRESS production   # 0xb1a5826C3Ae8afDfB724D0DBaEEbAa4841605B86
+vercel env add RILL_CHAIN_ID production       # 114
+vercel deploy --prod --yes
+```
 
 ## Stack
 

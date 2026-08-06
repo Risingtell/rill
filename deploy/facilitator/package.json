@@ -1,0 +1,16 @@
+{
+  "name": "rill-facilitator",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "index.js",
+  "scripts": { "start": "node index.js" },
+  "dependencies": {
+    "express": "^4.22.2",
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
+    "viem": "^2.55.10",
+    "@x402/core": "^2.21.0",
+    "@x402/evm": "^2.21.0"
+  }
+}
