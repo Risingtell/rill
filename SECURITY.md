@@ -10,6 +10,18 @@ same contract profile confirmed on Flare mainnet (chain id 14) but not yet deplo
 there. It has not been audited and is not production ready. Do not point it at a
 mainnet deployment or a key holding real value without an independent review first.
 
+## Known dependency vulnerabilities (accepted, dev-tooling only)
+
+`npm audit` reports vulnerabilities in Hardhat 2's own bundled toolchain
+(`hardhat-toolbox`'s compiler wrapper, test helpers, gas reporter, and their
+transitive deps). All of them require jumping to Hardhat 3 to clear, a breaking
+migration deliberately avoided here for stability. None of these packages run
+against the deployed contract or the live facilitator/demo services; they only
+execute locally during `npm run compile` / `npm test`. Accepted as a known limitation
+rather than risking a late, disruptive toolchain migration on a working, verified
+system. Revisit once Hardhat 2 patches its own dependency tree, or when migrating to
+Hardhat 3 can be scheduled with time to re-verify everything against it.
+
 ## Credentials this project touches
 
 - **`RILL_FACILITATOR_KEY`** pays gas for every settlement and every sponsored permit.
