@@ -1,8 +1,8 @@
 /**
  * Flare Smart Accounts funding path: an XRPL holder sends one XRP Payment carrying an
- * encoded memo, and — via Flare's FAssets "direct minting" flow and an off-chain
- * executor — that mints FXRP straight into their Flare smart account, with the memo
- * able to carry a follow-on action to execute immediately once funded.
+ * encoded memo. Via Flare's FAssets "direct minting" flow and an off-chain executor,
+ * that mints FXRP straight into their Flare smart account, with the memo able to
+ * carry a follow-on action to execute immediately once funded.
  *
  * What is verified here, against the real @flarenetwork/smart-accounts-encoder
  * package (not docs paraphrase) and Flare's own "Direct Mint FXRP" guide:
@@ -10,8 +10,8 @@
  *     minting path, not the deprecated CollateralReservation (CRT) instructions.
  *     Flare's guide states 0xFF is used for "smart-account flows with inline memos"
  *     finalized by `executeDirectMinting`.
- *   - The instruction's input shape — {walletId, executorFeeUBA, packedUserOperation}
- *     — and the PackedUserOperation ABI tuple layout (sender/nonce/initCode/callData/
+ *   - The instruction's input shape ({walletId, executorFeeUBA, packedUserOperation})
+ *     and the PackedUserOperation ABI tuple layout (sender/nonce/initCode/callData/
  *     accountGasLimits/preVerificationGas/gasFees/paymasterAndData/signature) are both
  *     taken directly from the package's shipped .d.ts and its own README example.
  *
@@ -19,7 +19,7 @@
  * rather than guessed: the exact ABI of the Flare smart account's own
  * `executeUserOp(Call[])` entry point (its Call{target,value,data} struct and
  * selector). Flare has not published that ABI anywhere this session could confirm on
- * a live testnet call, so this module does not fabricate it — `buildPermitCallData`
+ * a live testnet call, so this module does not fabricate it. `buildPermitCallData`
  * gives you the correctly-encoded FXRP `permit()` call to put in that Call array once
  * you have the real ABI. Guessing this rather than leaving the seam open would risk
  * producing a memo that looks valid but silently fails on-chain.
@@ -80,7 +80,7 @@ export function encodePackedUserOperation(fields: PackedUserOperationFields): He
 
 /**
  * FXRP.permit() calldata for a smart account to approve FXRP3009's allowance the
- * instant its balance is minted — the "one permit (gasless)" step in SPEC.md's flow
+ * instant its balance is minted: the "one permit (gasless)" step in SPEC.md's flow
  * diagram, riding the same XRPL payment that funded the account. Plug the result into
  * whichever Call{target,value,data} entry your confirmed executeUserOp ABI expects,
  * target = the FXRP token address.
@@ -105,7 +105,7 @@ export function buildPermitCallData(auth: {
  * Builds the full XRPL Payment memo: header (walletId, executor fee) + the
  * ABI-encoded PackedUserOperation, ready to attach to an XRPL Payment transaction to
  * Flare's Core Vault address (see Flare's Direct Minting guide for that address on
- * your target network — not reproduced here since this session could not confirm it
+ * your target network, not reproduced here since this session could not confirm it
  * against a live source).
  */
 export function buildFundingMemo(opts: {

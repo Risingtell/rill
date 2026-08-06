@@ -3,7 +3,7 @@ import "@nomicfoundation/hardhat-toolbox";
 import * as fs from "fs";
 import "dotenv/config";
 
-// Local throwaway signer for Coston2. Never commit this file's contents —
+// Local throwaway signer for Coston2. Never commit this file's contents,
 // generated once via `node -e` and gitignored, see .throwaway-key.local.
 function loadDeployerKey(): string[] {
   const envKey = process.env.PRIVATE_KEY;

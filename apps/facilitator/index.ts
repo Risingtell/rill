@@ -1,5 +1,5 @@
 /**
- * Standalone Rill facilitator server. Deployable on its own (Render/Vercel — see
+ * Standalone Rill facilitator server. Deployable on its own (Render/Vercel, see
  * SPEC.md section 6, no ngrok) so any x402 client or resource server, not just
  * apps/demo, can settle FXRP3009 authorizations against it.
  */

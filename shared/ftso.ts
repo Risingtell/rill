@@ -1,8 +1,8 @@
 /**
  * Reads Flare's FTSOv2 XRP/USD feed to price the stream in FXRP. Addresses and feed IDs
  * verified against the published @flarenetwork/flare-periphery-contracts package
- * (coston2/ContractRegistry.sol, coston2/FtsoV2Interface.sol) rather than docs alone —
- * the registry address is constant across every Flare network, feeds resolve
+ * (coston2/ContractRegistry.sol, coston2/FtsoV2Interface.sol) rather than docs alone.
+ * The registry address is constant across every Flare network; feeds resolve
  * dynamically through it because underlying FTSO contract addresses do change.
  *
  * This is what makes FTSO load-bearing rather than decorative (SPEC.md section 3):
@@ -41,7 +41,7 @@ const FTSO_V2_ABI = [
   },
 ] as const;
 
-/** keccak256(abi.encode("FtsoV2")) — Solidity's string ABI-encoding, replicated in viem. */
+/** keccak256(abi.encode("FtsoV2")): Solidity's string ABI-encoding, replicated in viem. */
 const FTSO_V2_NAME_HASH = keccak256(encodeAbiParameters([{ type: "string" }], ["FtsoV2"]));
 
 export interface XrpUsdPrice {

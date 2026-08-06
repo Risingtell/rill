@@ -1,7 +1,7 @@
 /**
  * Rill's self-hosted x402 facilitator, as a mountable Express router.
  *
- * Verification and settlement are @x402/evm's real `registerExactEvmScheme` — the same
+ * Verification and settlement are @x402/evm's real `registerExactEvmScheme`, the same
  * exact/EIP-3009 scheme implementation a stock facilitator runs against USDC on Base,
  * pointed at FXRP3009 on Flare instead. This file is only the HTTP surface plus the
  * safety rails a facilitator that spends real gas needs: an asset allowlist (so it can
@@ -122,7 +122,7 @@ export function createFacilitatorRouter(opts: FacilitatorRouterOptions): { route
    * Sponsor the one-time EIP-2612 permit that opens a session. The payer signs
    * off-chain (free); this relays it on-chain using the facilitator's own gas, exactly
    * like /settle relays a tick authorization. Always targets real FXRP for this
-   * facilitator's configured chain — never a client-supplied token address.
+   * facilitator's configured chain, never a client-supplied token address.
    */
   router.post("/sponsor-permit", async (req: Request, res: Response) => {
     try {

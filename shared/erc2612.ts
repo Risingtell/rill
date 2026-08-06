@@ -1,6 +1,6 @@
 /**
  * Minimal EIP-2612 `permit` relay. FXRP has `permit` but the payer has no gas token to
- * submit it themselves — any relayer can submit a validly-signed permit on someone
+ * submit it themselves. Any relayer can submit a validly-signed permit on someone
  * else's behalf, since the signature alone authorizes the allowance. The facilitator
  * sponsors this one call per session (see SPEC.md section 2: "exactly one permit per
  * session, at open"); every tick after that is a pure EIP-3009 authorization against

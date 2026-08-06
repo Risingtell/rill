@@ -1,12 +1,12 @@
 /**
  * Demo agent: an FXRP holder with zero gas, streaming the live XRP/USD feed and
- * paying for it. Every signature here is free — the only on-chain cost this process
+ * paying for it. Every signature here is free: the only on-chain cost this process
  * ever causes is paid by the facilitator, which is exactly the property FXRP3009
  * exists to prove (SPEC.md: "Zero C2FLR ever needed").
  *
  * Flow: one EIP-2612 permit at session open (facilitator-sponsored via
  * /sponsor-permit), then a signed EIP-3009 authorization per tick, matched exactly to
- * the server's quoted amount from its 402 response — see server.ts's two-phase tick
+ * the server's quoted amount from its 402 response. See server.ts's two-phase tick
  * design for why the amount must come from the server, not be computed locally.
  */
 

@@ -1,10 +1,10 @@
 /**
- * Fxrp3009SettlementProvider — meter402's SettlementProvider, backed by the FXRP3009
+ * Fxrp3009SettlementProvider: meter402's SettlementProvider, backed by the FXRP3009
  * shim (contracts/FXRP3009.sol) instead of a plain ERC-20 transfer.
  *
  * Unlike Spigot's ArcEoaSettlementProvider (agent signs AND broadcasts with its own
  * gas), the whole point of FXRP3009 is that the agent never holds a gas token. The
- * agent signs a standard EIP-3009 authorization off-chain — free — and hands it to
+ * agent signs a standard EIP-3009 authorization off-chain, free, and hands it to
  * this provider, which holds the facilitator's gas-paying key and broadcasts
  * `transferWithAuthorization` on the agent's behalf. meter402's split of
  * quoteTick()/settle() has no room for a signature parameter, so `stage()` is the
@@ -12,7 +12,7 @@
  * triggering the existing quoteTick -> settle -> commitTick sequence.
  *
  * verify()/settle() are @x402/evm's real ExactEvmScheme implementation, not a
- * hand-rolled check — the same code a stock x402 facilitator runs against USDC on
+ * hand-rolled check. The same code a stock x402 facilitator runs against USDC on
  * Base runs here against FXRP3009 on Flare (see shared/fxrp3009-facilitator.ts).
  * That is the whole thesis: SPEC.md section 2.
  */
@@ -77,7 +77,7 @@ export class Fxrp3009SettlementProvider implements SettlementProvider {
     const auth = this.pending.get(quote.session.id);
     this.pending.delete(quote.session.id);
     if (!auth) {
-      throw new Error(`no staged FXRP3009 authorization for session ${quote.session.id} — call stage() first`);
+      throw new Error(`no staged FXRP3009 authorization for session ${quote.session.id}, call stage() first`);
     }
 
     const payTo = quote.stream.payTo;

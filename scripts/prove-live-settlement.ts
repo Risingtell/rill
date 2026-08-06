@@ -7,7 +7,7 @@
  * Usage: npx hardhat run scripts/prove-live-settlement.ts --network coston2
  *
  * Uses the same funded key as both payer and facilitator (gas payer) since this is a
- * one-key proof run, not the demo's zero-gas-agent architecture — that's what
+ * one-key proof run, not the demo's zero-gas-agent architecture. That's what
  * apps/demo/agent.ts + apps/facilitator demonstrate instead, with two separate keys.
  */
 

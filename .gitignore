@@ -7,7 +7,7 @@ artifacts/
 cache/
 typechain-types/
 
-# Internal working docs — never ship these in front of judges (hackathon-ship §4)
+# Internal working docs, never ship these in front of judges (hackathon-ship §4)
 SUBMISSION.md
 VIDEO-SCRIPT.md
 PLAN.md

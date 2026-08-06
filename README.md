@@ -1,10 +1,10 @@
 # Rill
 
-**A standard EIP-3009 authorization shim for FXRP — the one thing missing before Flare's own x402 guide can run on its flagship FAsset instead of a mock token.**
+**A standard EIP-3009 authorization shim for FXRP: the one thing missing before Flare's own x402 guide can run on its flagship FAsset instead of a mock token.**
 
 Flare Summer Signal, Track 1 (Interoperable Asset Products). Full architecture rationale, the on-chain verification behind every claim below, and the four-systems breakdown live in [`SPEC.md`](./SPEC.md).
 
-**Live on Coston2.** `FXRP3009` is deployed at [`0xb1a5826C3Ae8afDfB724D0DBaEEbAa4841605B86`](https://coston2-explorer.flare.network/address/0xb1a5826C3Ae8afDfB724D0DBaEEbAa4841605B86), and a real permit plus a real EIP-3009 authorization have already moved real FXRP to a fresh, previously-empty address: [transaction `0xe905be786b250d1109667084448a901c769fd7abd282040d4c944b6ffb23ab90`](https://coston2-explorer.flare.network/tx/0xe905be786b250d1109667084448a901c769fd7abd282040d4c944b6ffb23ab90). Reproduce it yourself with `npx hardhat run scripts/prove-live-settlement.ts --network coston2`.
+**Live on Coston2.** `FXRP3009` is deployed at [`0xb1a5826C3Ae8afDfB724D0DBaEEbAa4841605B86`](https://coston2-explorer.flare.network/address/0xb1a5826C3Ae8afDfB724D0DBaEEbAa4841605B86). A real permit plus a real EIP-3009 authorization have already moved real FXRP to a fresh, previously-empty address, in [transaction `0xe905be786b250d1109667084448a901c769fd7abd282040d4c944b6ffb23ab90`](https://coston2-explorer.flare.network/tx/0xe905be786b250d1109667084448a901c769fd7abd282040d4c944b6ffb23ab90). Reproduce it yourself with `npx hardhat run scripts/prove-live-settlement.ts --network coston2`.
 
 ## The gap, verified on-chain
 
@@ -15,30 +15,30 @@ Flare's own x402 guide ships against **MockUSDT0**, not FXRP, because FXRP doesn
 | `permit` (EIP-2612) | yes | yes |
 | `transferWithAuthorization` (EIP-3009) | no | no |
 
-FXRP already has a gasless allowance mechanism (`permit`); it just doesn't speak the specific EIP-3009 shape that `x402` clients and facilitators expect. `FXRP3009.sol` is that shape, layered on top: one gasless `permit` opens a session's allowance, every tick after that is a standard EIP-3009 authorization drawn against it — real FXRP moving `payer -> payee` on every settlement, never custodied by the shim.
+FXRP already has a gasless allowance mechanism (`permit`), it just doesn't speak the specific EIP-3009 shape that `x402` clients and facilitators expect. `FXRP3009.sol` is that shape, layered on top: one gasless `permit` opens a session's allowance, then every tick after that is a standard EIP-3009 authorization drawn against it. Real FXRP moves `payer -> payee` on every settlement; it's never custodied by the shim.
 
 ## What's built and verified
 
 | Piece | Status |
 |---|---|
-| `contracts/FXRP3009.sol` — the shim | **12/12 tests passing**, plus **live on Coston2** with a real permit + EIP-3009 transfer proven on-chain (see above) |
-| `packages/provider` — `Fxrp3009SettlementProvider` | meter402's `SettlementProvider` interface, backed by `@x402/evm`'s **real, unmodified** EIP-3009 "exact" scheme — not a hand-rolled check |
-| `apps/facilitator` — standalone x402 facilitator | Live HTTP-tested: `/health`, `/supported`, `/verify`, `/settle`, `/sponsor-permit`; asset-allowlisted so it can only ever settle FXRP3009 |
-| `apps/demo` — metered stream + agent + console | End-to-end tested: two-phase 402 quote/settle, live console screenshotted rendering real settlement rows |
-| FTSOv2 pricing | **Live-verified against Coston2**: dynamically resolves `FtsoV2` through `ContractRegistry` (not a hardcoded address — one doc's copy of that address was silently corrupted by one character; verifying on-chain caught it), reads XRP/USD, converts a USD/sec rate to FXRP smallest units in real time |
-| Smart Accounts funding memo | **3/3 tests passing**, round-tripped through Flare's own `@flarenetwork/smart-accounts-encoder` package — see honest limitations below |
+| `contracts/FXRP3009.sol` | **12/12 tests passing**, plus **live on Coston2** with a real permit + EIP-3009 transfer proven on-chain (see above) |
+| `packages/provider/Fxrp3009SettlementProvider` | meter402's `SettlementProvider` interface, backed by `@x402/evm`'s **real, unmodified** EIP-3009 "exact" scheme, not a hand-rolled check |
+| `apps/facilitator` (standalone x402 facilitator) | Live HTTP-tested: `/health`, `/supported`, `/verify`, `/settle`, `/sponsor-permit`; asset-allowlisted so it can only ever settle FXRP3009 |
+| `apps/demo` (metered stream + agent + console) | End-to-end tested: two-phase 402 quote/settle, live console screenshotted rendering real settlement rows |
+| FTSOv2 pricing | **Live-verified against Coston2**: dynamically resolves `FtsoV2` through `ContractRegistry`, not a hardcoded address (one doc's copy of that address was silently corrupted by one character; verifying on-chain caught it), reads XRP/USD, converts a USD/sec rate to FXRP smallest units in real time |
+| Smart Accounts funding memo | **3/3 tests passing**, round-tripped through Flare's own `@flarenetwork/smart-accounts-encoder` package, see honest limitations below |
 
 ## The four Flare systems, each load-bearing
 
-- **FAssets / FXRP** — the settlement asset. `FXRP3009` exists specifically to fix its EIP-3009 gap.
-- **FTSO** — live XRP/USD pricing, resolved through the real `ContractRegistry`, not hardcoded.
-- **meter402** — the metering core (already proven live on Arc testnet and X Layer mainnet in sibling projects). `Fxrp3009SettlementProvider` is the new `SettlementProvider` for it.
-- **Flare Smart Accounts** — the funding path: an XRPL holder sends one XRP payment with an encoded memo; see limitations below for exactly how far this goes today.
+- **FAssets / FXRP**: the settlement asset. `FXRP3009` exists specifically to fix its EIP-3009 gap.
+- **FTSO**: live XRP/USD pricing, resolved through the real `ContractRegistry`, not hardcoded.
+- **meter402**: the metering core (already proven live on Arc testnet and X Layer mainnet in sibling projects). `Fxrp3009SettlementProvider` is the new `SettlementProvider` for it.
+- **Flare Smart Accounts**: the funding path. An XRPL holder sends one XRP payment with an encoded memo; see limitations below for exactly how far this goes today.
 
 ## Honest limitations
 
 - **The demo app (facilitator + console) isn't pointed at the live deployment yet.** The contract itself is live and proven on Coston2 (see above); `apps/demo` and `apps/facilitator` are still verified end-to-end in mock-settlement mode, not yet deployed as public services against the real `FXRP3009` address.
-- **Smart Accounts funding is encoding-complete, not execution-complete.** `MemoFieldUserOpCustomInstruction` (opcode `0xFF`) is confirmed as part of Flare's *current* minting path (not the deprecated CollateralReservation instructions), and the memo built by `shared/smart-account-funding.ts` round-trips correctly through Flare's own encoder. What's intentionally left open: the exact ABI of the Flare smart account's own `executeUserOp(Call[])` entry point isn't published anywhere this session could confirm against a live call, so it's a caller-supplied parameter rather than a guess. Wiring it up needs that ABI confirmed against Flare's deployed contracts, or a fallback to Flare's own Smart Accounts UI to fund a session directly.
+- **Smart Accounts funding is encoding-complete, not execution-complete.** `MemoFieldUserOpCustomInstruction` (opcode `0xFF`) is confirmed as part of Flare's *current* minting path, not the deprecated CollateralReservation instructions, and the memo built by `shared/smart-account-funding.ts` round-trips correctly through Flare's own encoder. What's intentionally left open: the exact ABI of the Flare smart account's own `executeUserOp(Call[])` entry point isn't published anywhere this session could confirm against a live call, so it's a caller-supplied parameter rather than a guess. Wiring it up needs that ABI confirmed against Flare's deployed contracts, or a fallback to Flare's own Smart Accounts UI to fund a session directly.
 - **FTSO `getFeedById` is the testnet (`view`) signature.** Mainnet's is `payable` and needs `FeeCalculator` fee handling, out of scope for this Coston2-only demo.
 
 ## Repository structure

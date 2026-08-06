@@ -50,7 +50,7 @@ contract FXRP3009 is EIP712 {
     }
 
     /// @notice Move `value` FXRP from `from` to `to`. Callable by anyone holding a valid
-    /// signature from `from` — this is what lets an x402 facilitator submit the tick.
+    /// signature from `from`. This is what lets an x402 facilitator submit the tick.
     function transferWithAuthorization(
         address from,
         address to,
@@ -73,7 +73,7 @@ contract FXRP3009 is EIP712 {
         token.safeTransferFrom(from, to, value);
     }
 
-    /// @notice Same authorization as above, but only the payee can submit it — protects
+    /// @notice Same authorization as above, but only the payee can submit it. Protects
     /// against a third party front-running the payee's own claim.
     function receiveWithAuthorization(
         address from,

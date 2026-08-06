@@ -3,7 +3,7 @@
  * settled in real FXRP through the FXRP3009 shim.
  *
  * Ticks are two-phase, not one-shot, because meter402's quoteTick() is a pure
- * computation of elapsed wall-clock time — if the server re-quoted after the client
+ * computation of elapsed wall-clock time. If the server re-quoted after the client
  * signs, the signed amount and the settled amount could drift apart on every request.
  * So the server quotes once, stashes that exact quote, and returns it as a standard
  * x402 402 Payment Required response; the client signs an EIP-3009 authorization for
@@ -126,7 +126,7 @@ app.post("/sessions/:id/tick", async (req: Request, res: Response) => {
     }
 
     const quote = pendingQuotes.get(req.params.id);
-    if (!quote) return res.status(409).json({ error: "no pending quote for this session — request a 402 first" });
+    if (!quote) return res.status(409).json({ error: "no pending quote for this session, request a 402 first" });
     pendingQuotes.delete(req.params.id);
 
     if (live && provider instanceof Fxrp3009SettlementProvider) {

@@ -42,7 +42,7 @@ npm run test:services
   ID, and package API in this repo was confirmed against the real deployed contract or
   the real npm package, not copied from a doc's prose. `shared/ftso.ts`'s
   `ContractRegistry` address and `shared/smart-account-funding.ts`'s instruction shapes
-  are both examples — if you add a constant, add (or point to) the check that proves it.
+  are both examples. If you add a constant, add (or point to) the check that proves it.
 - **Never guess an ABI or address you can't verify.** `shared/smart-account-funding.ts`
   intentionally leaves the Flare smart account's `executeUserOp` ABI as a caller-supplied
   parameter rather than fabricating it. If you complete that integration, verify the ABI
