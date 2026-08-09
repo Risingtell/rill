@@ -39,7 +39,7 @@ FXRP already has a gasless allowance mechanism (`permit`), it just doesn't speak
 
 ## Honest limitations
 
-- **The demo app (facilitator + console) isn't pointed at the live deployment yet.** The contract itself is live and proven on Coston2 (see above); `apps/demo` and `apps/facilitator` are still verified end-to-end in mock-settlement mode, not yet deployed as public services against the real `FXRP3009` address.
+- **The demo console isn't deployed yet.** The facilitator is (see above, `/health` responds live against the real `FXRP3009` address). The console (`apps/demo`) holds open sessions and pending quotes in memory, so it needs a host that runs one persistent process (Render, Fly) rather than a serverless function that can cold-start into a fresh, empty instance mid-session. Verified end-to-end in mock-settlement mode; not yet public.
 - **Smart Accounts funding is encoding-complete, not execution-complete.** `MemoFieldUserOpCustomInstruction` (opcode `0xFF`) is confirmed as part of Flare's *current* minting path, not the deprecated CollateralReservation instructions, and the memo built by `shared/smart-account-funding.ts` round-trips correctly through Flare's own encoder. What's intentionally left open: the exact ABI of the Flare smart account's own `executeUserOp(Call[])` entry point isn't published anywhere this session could confirm against a live call, so it's a caller-supplied parameter rather than a guess. Wiring it up needs that ABI confirmed against Flare's deployed contracts, or a fallback to Flare's own Smart Accounts UI to fund a session directly.
 - **FTSO `getFeedById` is the testnet (`view`) signature.** Mainnet's is `payable` and needs `FeeCalculator` fee handling, out of scope for this Coston2-only demo.
 
