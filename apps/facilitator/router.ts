@@ -59,6 +59,15 @@ export function createFacilitatorRouter(opts: FacilitatorRouterOptions): { route
 
   const router = Router();
 
+  router.get("/", (_req, res) => {
+    res.json({
+      name: "Rill facilitator",
+      description: "Standard x402 exact-scheme facilitator for FXRP3009 on Flare",
+      endpoints: ["/health", "/supported", "/verify", "/settle", "/sponsor-permit"],
+      repo: "https://github.com/Risingtell/rill",
+    });
+  });
+
   router.get("/health", (_req, res) => {
     res.json({ status: "ok", network: fac.network, facilitatorAddress: fac.facilitatorAddress, shimAddress: opts.shimAddress });
   });
