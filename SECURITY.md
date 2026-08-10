@@ -22,6 +22,18 @@ rather than risking a late, disruptive toolchain migration on a working, verifie
 system. Revisit once Hardhat 2 patches its own dependency tree, or when migrating to
 Hardhat 3 can be scheduled with time to re-verify everything against it.
 
+GitHub's Dependabot flags two of these as **critical** (`elliptic`, `form-data`), which
+is worth tracing rather than waving off given `elliptic` handles ECDSA signing.
+Checked with `npm ls elliptic`: two separate copies exist in the tree. The one that
+actually touches real signing, `@ethersproject/signing-key` (used by `hre.ethers`,
+which `scripts/deploy.ts` and `scripts/prove-live-settlement.ts` both sign real
+transactions with), resolves to `elliptic@6.6.1`, already past the patched version. The
+vulnerable copy, `elliptic@6.5.4` (and the flagged `form-data`), only exists inside
+`hardhat-gas-reporter`'s dependency chain (`eth-gas-reporter` -> `ethers@4.0.49`), and
+`hardhat-gas-reporter` is not configured anywhere in `hardhat.config.ts` (no
+`gasReporter` key), so that code path never executes. Real practical risk is low; the
+"critical" label reflects presence in the dependency tree, not reachability.
+
 ## Credentials this project touches
 
 - **`RILL_FACILITATOR_KEY`** pays gas for every settlement and every sponsored permit.
