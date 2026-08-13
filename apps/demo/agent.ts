@@ -86,20 +86,36 @@ function splitSignature(sig: Hex): { r: Hex; s: Hex; v: number } {
   return { r, s, v };
 }
 
-async function tick(account: ReturnType<typeof privateKeyToAccount>, sessionId: string) {
-  const quoteRes = await fetch(`${DEMO_URL}/sessions/${sessionId}/tick`, { method: "POST" });
+/** Returns the session token to use for the NEXT tick: session state advances each time. */
+async function tick(account: ReturnType<typeof privateKeyToAccount>, sessionId: string): Promise<string> {
+  let quoteRes = await fetch(`${DEMO_URL}/sessions/${sessionId}/tick`, { method: "POST" });
+
+  // 425 means not enough stream time has accrued for the tick to bill a non-zero
+  // amount yet. Wait the advised interval and ask again rather than paying nothing.
+  if (quoteRes.status === 425) {
+    const { retryAfterMs } = await json<{ retryAfterMs?: number }>(quoteRes);
+    await new Promise((r) => setTimeout(r, Math.min(retryAfterMs ?? 1000, 5000)));
+    quoteRes = await fetch(`${DEMO_URL}/sessions/${sessionId}/tick`, { method: "POST" });
+  }
+
   if (quoteRes.status !== 402) throw new Error(`expected 402 quote, got ${quoteRes.status}`);
   interface Accept {
     amount: string;
     payTo: Hex;
     asset: Hex;
-    extra: { nonce: Hex; validAfter: string; validBefore: string };
+    extra: { name?: string; version?: string; nonce: Hex; validAfter: string; validBefore: string; quoteToken?: string };
   }
   const { accepts } = await json<{ accepts: Accept[] }>(quoteRes);
   const req = accepts[0];
 
+  // Domain comes from the server's 402, not from a constant baked in here. That is the
+  // point of speaking standard x402: a client needs no Rill-specific knowledge to pay.
+  if (!req.extra.name || !req.extra.version) {
+    throw new Error("402 response did not advertise the asset's EIP-712 domain (extra.name / extra.version)");
+  }
+
   const signature = await account.signTypedData({
-    domain: { name: "FXRP3009", version: "1", chainId: chain.id, verifyingContract: (SHIM_ADDRESS ?? req.asset) as Hex },
+    domain: { name: req.extra.name, version: req.extra.version, chainId: chain.id, verifyingContract: (SHIM_ADDRESS ?? req.asset) as Hex },
     types: TRANSFER_AUTH_TYPES,
     primaryType: "TransferWithAuthorization",
     message: {
@@ -116,6 +132,9 @@ async function tick(account: ReturnType<typeof privateKeyToAccount>, sessionId: 
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
+      // Echoed straight back from the 402. The server settles the amount it pinned
+      // there, so a re-quote can never drift from what was just signed.
+      quoteToken: req.extra.quoteToken,
       authorization: {
         from: account.address,
         to: req.payTo,
@@ -129,7 +148,7 @@ async function tick(account: ReturnType<typeof privateKeyToAccount>, sessionId: 
   });
   const settled = await json<{
     error?: string;
-    session: { ticks: number };
+    session: { id: string; ticks: number };
     settlement: { txHash: string };
     data?: { xrpUsd: number };
   }>(settleRes);
@@ -137,6 +156,7 @@ async function tick(account: ReturnType<typeof privateKeyToAccount>, sessionId: 
   console.log(
     `[agent] tick ${settled.session.ticks}: paid ${req.amount} FXRP-units, tx ${settled.settlement.txHash || "(mock)"}, xrpUsd=${settled.data?.xrpUsd ?? "?"}`
   );
+  return settled.session.id;
 }
 
 async function main() {
@@ -152,14 +172,18 @@ async function main() {
     body: JSON.stringify({ agent: account.address, objective: "stream the live XRP/USD feed" }),
   });
   const session = await json<{ id: string }>(openRes);
-  console.log(`[agent] session opened: ${session.id}`);
+  let sessionToken = session.id;
+  console.log(`[agent] session opened`);
 
   for (let i = 0; i < TICKS; i++) {
-    await tick(account, session.id);
+    // Let stream time accrue BEFORE each tick, including the first. Ticking the
+    // instant the session opens meters almost nothing, so it bills a rounding error
+    // and still spends a whole transaction to move it.
     await new Promise((r) => setTimeout(r, TICK_INTERVAL_MS));
+    sessionToken = await tick(account, sessionToken);
   }
 
-  await fetch(`${DEMO_URL}/sessions/${session.id}/close`, {
+  await fetch(`${DEMO_URL}/sessions/${sessionToken}/close`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ reason: "demo run complete" }),

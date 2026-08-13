@@ -142,6 +142,67 @@ describe("FXRP3009", () => {
       expect(await shim.authorizationState(await payer.getAddress(), nonce)).to.equal(true);
     });
 
+    it("emits a Transfer mirroring the FXRP movement, so stock x402 facilitators can confirm settlement", async () => {
+      // x402's exact/EIP-3009 scheme confirms a payment by scanning the receipt for an
+      // ERC-20 Transfer emitted by the asset address it was handed, which here is the
+      // shim. The real movement is emitted by FXRP, so without this mirror an entirely
+      // valid payment is rejected as invalid_exact_evm_transfer_event_mismatch.
+      const { shim, payer, payee, facilitator } = await openSession();
+      const nonce = ethers.hexlify(ethers.randomBytes(32));
+      const sig = await signTransferAuthorization(shim, payer, await payee.getAddress(), TICK_VALUE, 0n, FAR_FUTURE, nonce);
+
+      await expect(
+        shim
+          .connect(facilitator)
+          .transferWithAuthorization(await payer.getAddress(), await payee.getAddress(), TICK_VALUE, 0n, FAR_FUTURE, nonce, sig.v, sig.r, sig.s)
+      )
+        .to.emit(shim, "Transfer")
+        .withArgs(await payer.getAddress(), await payee.getAddress(), TICK_VALUE);
+    });
+
+    it("mirrors the Transfer on the receiveWithAuthorization path too", async () => {
+      const { shim, payer, payee } = await openSession();
+      const nonce = ethers.hexlify(ethers.randomBytes(32));
+      const sig = await signTransferAuthorization(
+        shim,
+        payer,
+        await payee.getAddress(),
+        TICK_VALUE,
+        0n,
+        FAR_FUTURE,
+        nonce,
+        "ReceiveWithAuthorization"
+      );
+
+      await expect(
+        shim
+          .connect(payee)
+          .receiveWithAuthorization(await payer.getAddress(), await payee.getAddress(), TICK_VALUE, 0n, FAR_FUTURE, nonce, sig.v, sig.r, sig.s)
+      )
+        .to.emit(shim, "Transfer")
+        .withArgs(await payer.getAddress(), await payee.getAddress(), TICK_VALUE);
+    });
+
+    it("mirrors no Transfer when the authorization reverts", async () => {
+      // The mirror must never claim a movement that did not happen.
+      const { shim, payer, payee, facilitator } = await openSession();
+      const nonce = ethers.hexlify(ethers.randomBytes(32));
+      const sig = await signTransferAuthorization(shim, payer, await payee.getAddress(), TICK_VALUE, 0n, FAR_FUTURE, nonce);
+
+      await expect(
+        shim
+          .connect(facilitator)
+          .transferWithAuthorization(await payer.getAddress(), await payee.getAddress(), TICK_VALUE, 0n, FAR_FUTURE, nonce, sig.v, sig.r, sig.s)
+      ).to.emit(shim, "Transfer");
+
+      // Replaying the same nonce reverts, so no second Transfer is emitted.
+      await expect(
+        shim
+          .connect(facilitator)
+          .transferWithAuthorization(await payer.getAddress(), await payee.getAddress(), TICK_VALUE, 0n, FAR_FUTURE, nonce, sig.v, sig.r, sig.s)
+      ).to.be.revertedWithCustomError(shim, "AuthorizationAlreadyUsed");
+    });
+
     it("lets any address (the facilitator) submit the tick, per EIP-3009", async () => {
       const { shim, payer, payee, stranger } = await openSession();
       const nonce = ethers.hexlify(ethers.randomBytes(32));

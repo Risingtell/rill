@@ -75,6 +75,20 @@ Why this beats the two obvious alternatives:
 Payer signs two things off-chain and broadcasts nothing: one `permit` at session open, then one
 authorization per tick. Zero C2FLR ever needed.
 
+**The one concession the standard forced, found by running it (2026-08-13):** x402's `exact` scheme
+confirms a settlement by scanning the receipt for an ERC-20 `Transfer` emitted *by the asset address
+it was handed*. That address is the shim, but the real movement is emitted by FXRP, so a perfectly
+valid payment came back as `invalid_exact_evm_transfer_event_mismatch`. The shim therefore mirrors
+the movement with its own `Transfer` event. It is a log only: nothing is minted, nothing is
+custodied, and every balance still lives in the FXRP contract. Without it the claim in this section,
+that an unmodified x402 facilitator works against FXRP, would simply be false.
+
+**Metering data rides along on the nonce.** EIP-3009 needs a unique `bytes32` per authorization and
+the shim emits it as an indexed topic anyway, so the low 6 bytes carry the tick's duration in
+milliseconds behind a `0x524C` marker (`shared/tick-nonce.ts`). Per-second accounting therefore
+lands on-chain at zero extra gas, and the console's totals are recomputable by anyone from explorer
+data alone rather than being a claim about our own database.
+
 **Nonce hazard, handled:** EIP-2612 `permit` nonces are *sequential*, so concurrent permits race.
 EIP-3009 nonces are *random bytes32* and don't. Design consequence: exactly **one** permit per
 session, at open, for the session's full budget. Every subsequent tick is a pure EIP-3009
@@ -130,6 +144,14 @@ check independently.
 28 of 37 FCC endpoints in the July census were already dead when probed, and judging runs a week
 *after* submission. **No ngrok, no trycloudflare.** Deploy the facilitator and console to a real
 host (Render/Vercel) that will still answer from 15 to 21 August.
+
+**Resolved 2026-08-13.** Both services are live on Vercel. The console got there by being made
+genuinely stateless rather than by finding a host that runs a persistent process: session and quote
+state travel with the client as HMAC-signed tokens (`shared/session-token.ts`), and every figure the
+console reports is read back from Coston2 (`shared/chain-impact.ts`). The failure this avoids is not
+theoretical: the first serverless deploy 404'd on every tick, because the instance that opened a
+session was not the instance that received the next request. It also means a cold start, a redeploy
+or a week of idling cannot reset the numbers a judge sees to zero.
 
 ## 7. Open risks
 

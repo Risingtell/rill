@@ -35,6 +35,18 @@ contract FXRP3009 is EIP712 {
     event AuthorizationUsed(address indexed authorizer, bytes32 indexed nonce);
     event AuthorizationCanceled(address indexed authorizer, bytes32 indexed nonce);
 
+    /// @notice Mirrors the FXRP movement each authorization causes.
+    /// @dev This shim is the EIP-3009 endpoint for a token that has none, so a payment
+    /// client is handed THIS address as the asset. A standard x402 facilitator confirms
+    /// settlement by scanning the receipt for an ERC-20 `Transfer` emitted by the asset
+    /// it was given, and since the real transfer is emitted by FXRP rather than by this
+    /// contract, that check would find nothing and reject an otherwise valid payment.
+    /// Re-emitting the same movement here makes the shim a faithful EIP-3009 view of
+    /// FXRP, so unmodified x402 facilitators verify against it without special cases.
+    /// This is a log only: it mints nothing and moves nothing, and every balance still
+    /// lives in the FXRP contract.
+    event Transfer(address indexed from, address indexed to, uint256 value);
+
     error AuthorizationExpired(uint256 validBefore, uint256 blockTimestamp);
     error AuthorizationNotYetValid(uint256 validAfter, uint256 blockTimestamp);
     error AuthorizationAlreadyUsed(address authorizer, bytes32 nonce);
@@ -71,6 +83,7 @@ contract FXRP3009 is EIP712 {
 
         _markAuthorizationUsed(from, nonce);
         token.safeTransferFrom(from, to, value);
+        emit Transfer(from, to, value);
     }
 
     /// @notice Same authorization as above, but only the payee can submit it. Protects
@@ -96,6 +109,7 @@ contract FXRP3009 is EIP712 {
 
         _markAuthorizationUsed(from, nonce);
         token.safeTransferFrom(from, to, value);
+        emit Transfer(from, to, value);
     }
 
     function cancelAuthorization(address authorizer, bytes32 nonce, uint8 v, bytes32 r, bytes32 s) external {

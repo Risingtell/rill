@@ -25,16 +25,27 @@
     border-bottom: 1px solid var(--line);
     padding: 28px 40px;
   }
+  .bar {
+    max-width: 1280px;
+    margin: 0 auto;
+    display: flex;
+    align-items: baseline;
+    gap: 14px;
+    flex-wrap: wrap;
+  }
   header h1 {
-    margin: 0 0 6px;
+    margin: 0;
     font-size: 22px;
     letter-spacing: 0.08em;
     text-transform: uppercase;
   }
   header p {
-    margin: 0;
+    margin: 6px 0 0;
     color: var(--dim);
     font-size: 13px;
+    max-width: 1280px;
+    margin-left: auto;
+    margin-right: auto;
   }
   main {
     max-width: 1280px;
@@ -48,6 +59,7 @@
     border: 1px solid var(--line);
     background: var(--panel);
     padding: 20px;
+    min-width: 0;
   }
   .stat .label {
     color: var(--dim);
@@ -59,22 +71,23 @@
   .stat .value {
     font-size: 28px;
     font-weight: 600;
+    overflow-wrap: anywhere;
   }
   .stat .value.accent { color: var(--accent); }
+  .stat .sub { color: var(--dim); font-size: 11px; margin-top: 6px; }
   .full { grid-column: 1 / -1; }
+  .scroll { overflow-x: auto; }
   table {
     width: 100%;
     border-collapse: collapse;
     font-size: 13px;
+    min-width: 720px;
   }
   th, td {
     text-align: left;
     padding: 10px 12px;
     border-bottom: 1px solid var(--line);
     white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    max-width: 220px;
   }
   th {
     color: var(--dim);
@@ -95,74 +108,161 @@
   .mode.live { color: var(--accent); border-color: var(--accent); }
   .mode.mock { color: var(--warn); border-color: var(--warn); }
   .empty { color: var(--dim); padding: 20px 0; font-size: 13px; }
+  .verify { font-size: 12px; color: var(--dim); line-height: 1.7; }
+  .verify code { color: var(--fg); }
+  .err {
+    border-color: var(--warn);
+    color: var(--warn);
+    font-size: 13px;
+  }
+  @media (max-width: 900px) {
+    main { grid-template-columns: repeat(2, 1fr); padding: 24px 20px 60px; }
+    header { padding: 20px; }
+  }
+  @media (max-width: 560px) {
+    main { grid-template-columns: 1fr; }
+    .stat .value { font-size: 22px; }
+  }
 </style>
 </head>
 <body>
 <header>
-  <h1>Rill: live console</h1>
-  <p>Pay-per-second XRP/USD feed, settled in real FXRP through the FXRP3009 EIP-3009 shim.</p>
+  <div class="bar">
+    <h1>Rill: live console</h1>
+    <span class="mode" id="mode">...</span>
+  </div>
+  <p>Pay-per-second XRP/USD feed, settled in real FXRP through the FXRP3009 EIP-3009 shim. Every figure below is read back from Coston2, not from this server's memory.</p>
 </header>
 <main>
   <div class="stat">
     <div class="label">XRP / USD (FTSOv2)</div>
     <div class="value accent" id="price">...</div>
+    <div class="sub">live feed, read on demand</div>
   </div>
   <div class="stat">
     <div class="label">Settlements</div>
     <div class="value" id="settlements">...</div>
+    <div class="sub" id="settlementsSub">on-chain transfers</div>
   </div>
   <div class="stat">
     <div class="label">Total paid</div>
     <div class="value" id="totalPaid">...</div>
+    <div class="sub">sum of on-chain FXRP moved</div>
   </div>
   <div class="stat">
     <div class="label">Network</div>
     <div class="value" id="network">...</div>
+    <div class="sub" id="networkSub">&nbsp;</div>
   </div>
   <div class="stat">
     <div class="label">Seconds streamed</div>
     <div class="value" id="seconds">...</div>
+    <div class="sub" id="secondsSub">decoded from the tick nonce</div>
   </div>
   <div class="stat">
     <div class="label">Unique agents</div>
     <div class="value" id="agents">...</div>
+    <div class="sub">distinct paying addresses</div>
   </div>
 
   <div class="stat full">
     <div class="label">Recent settlements</div>
-    <table>
-      <thead>
-        <tr><th>Agent</th><th>Amount</th><th>Seconds</th><th>Tx</th><th>When</th></tr>
-      </thead>
-      <tbody id="recent"></tbody>
-    </table>
+    <div class="scroll">
+      <table>
+        <thead>
+          <tr><th>Agent</th><th>Amount</th><th>Seconds</th><th>Tx</th><th>When</th></tr>
+        </thead>
+        <tbody id="recent"></tbody>
+      </table>
+    </div>
     <div class="empty" id="empty" style="display:none">No settlements yet. Run apps/demo/agent.ts to stream a session.</div>
+  </div>
+
+  <div class="stat full verify" id="verify">
+    <div class="label">Check this yourself</div>
+    <div id="verifyBody">...</div>
   </div>
 </main>
 <script>
   function short(addr) {
     if (!addr) return "";
-    return addr.length > 14 ? addr.slice(0, 8) + "…" + addr.slice(-4) : addr;
+    return addr.length > 14 ? addr.slice(0, 8) + "..." + addr.slice(-4) : addr;
+  }
+
+  let config = null;
+
+  async function loadConfig() {
+    try {
+      const res = await fetch("/config");
+      if (res.ok) config = await res.json();
+    } catch (err) {
+      console.error("config load failed", err);
+    }
+    renderVerify();
+  }
+
+  function renderVerify() {
+    const el = document.getElementById("verifyBody");
+    if (!config) { el.textContent = "Configuration unavailable."; return; }
+    const ex = config.explorer;
+    const rows = [];
+    if (config.shimAddress) {
+      rows.push(`FXRP3009 shim (verified source): <a href="${ex}/address/${config.shimAddress}#code" target="_blank" rel="noopener">${config.shimAddress}</a>`);
+    }
+    if (config.payTo) {
+      rows.push(`Every settlement above is an FXRP transfer into <a href="${ex}/address/${config.payTo}?tab=token_transfers" target="_blank" rel="noopener">${config.payTo}</a>`);
+    }
+    rows.push(`FXRP token: <a href="${ex}/address/${config.fxrpAddress}" target="_blank" rel="noopener">${config.fxrpAddress}</a>`);
+    rows.push(`Each tick's duration is encoded in the low 6 bytes of its EIP-3009 nonce (magic <code>0x524C</code>), emitted on-chain in <code>AuthorizationUsed</code>, so the "seconds streamed" figure is independently checkable.`);
+    rows.push(`Price: $${config.usdPerSecond}/second, converted to FXRP at the live FTSOv2 rate at settlement time.`);
+    el.innerHTML = rows.map((r) => `<div>${r}</div>`).join("");
   }
 
   async function refresh() {
     try {
       const [impactRes, priceRes] = await Promise.all([fetch("/impact"), fetch("/price")]);
-      const impact = await impactRes.json();
       const price = priceRes.ok ? await priceRes.json() : null;
+      document.getElementById("price").textContent = price ? "$" + price.usd.toFixed(4) : "unavailable";
 
-      document.getElementById("price").textContent = price ? "$" + price.usd.toFixed(4) : "...";
+      const verifyEl = document.getElementById("verify");
+      if (!impactRes.ok) {
+        const body = await impactRes.json().catch(() => ({}));
+        verifyEl.classList.add("err");
+        document.getElementById("settlementsSub").textContent = body.error || "explorer unreachable";
+        return;
+      }
+      verifyEl.classList.remove("err");
+      const impact = await impactRes.json();
+
+      const modeEl = document.getElementById("mode");
+      modeEl.textContent = impact.mock ? "mock" : "live";
+      modeEl.className = "mode " + (impact.mock ? "mock" : "live");
+
       document.getElementById("settlements").textContent = impact.totals.settlements;
-      document.getElementById("totalPaid").textContent = impact.totals.totalPaid + " " + (impact.totals.asset || "");
+      document.getElementById("settlementsSub").textContent = impact.stale
+        ? "explorer lagging, showing last good read"
+        : (impact.source === "chain" ? "read from the block explorer" : "in-memory (mock mode)");
+
+      const paid = impact.totals.totalPaidFormatted ?? impact.totals.totalPaid;
+      document.getElementById("totalPaid").textContent = paid + " " + (impact.totals.asset || "");
+
       document.getElementById("network").textContent = impact.network;
       document.getElementById("network").className = "value " + (impact.mock ? "" : "accent");
+      document.getElementById("networkSub").textContent = impact.mock ? "no chain reads in mock mode" : "Flare Coston2";
+
       document.getElementById("seconds").textContent = impact.totals.secondsStreamed.toFixed(2) + "s";
+      const withDuration = impact.totals.durationsOnChain;
+      document.getElementById("secondsSub").textContent =
+        withDuration === undefined
+          ? "decoded from the tick nonce"
+          : `${withDuration} of ${impact.totals.settlements} ticks carry an on-chain duration`;
+
       document.getElementById("agents").textContent = impact.totals.uniqueAgents;
 
       const tbody = document.getElementById("recent");
       const empty = document.getElementById("empty");
       tbody.innerHTML = "";
-      if (impact.recent.length === 0) {
+      if (!impact.recent || impact.recent.length === 0) {
         empty.style.display = "block";
       } else {
         empty.style.display = "none";
@@ -171,13 +271,14 @@
           const txCell = e.explorerUrl
             ? `<a href="${e.explorerUrl}" target="_blank" rel="noopener">${short(e.txHash)}</a>`
             : short(e.txHash) || "(mock)";
-          tr.innerHTML = `
-            <td>${short(e.agent)}</td>
-            <td>${e.amount} ${e.asset}</td>
-            <td>${e.seconds.toFixed(3)}</td>
-            <td>${txCell}</td>
-            <td>${new Date(e.settledAt).toLocaleTimeString()}</td>
-          `;
+          const amount = (e.amountFormatted ?? e.amount) + " " + e.asset;
+          const seconds = e.seconds === undefined || e.seconds === null ? "n/a" : e.seconds.toFixed(3);
+          tr.innerHTML =
+            `<td>${short(e.agent)}</td>` +
+            `<td>${amount}</td>` +
+            `<td>${seconds}</td>` +
+            `<td>${txCell}</td>` +
+            `<td>${e.settledAt ? new Date(e.settledAt).toLocaleTimeString() : ""}</td>`;
           tbody.appendChild(tr);
         }
       }
@@ -186,8 +287,10 @@
     }
   }
 
+  loadConfig();
   refresh();
-  setInterval(refresh, 2000);
+  // Matches the server's 5s impact cache; polling faster just returns the same snapshot.
+  setInterval(refresh, 5000);
 </script>
 </body>
 </html>

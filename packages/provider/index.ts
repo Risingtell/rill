@@ -34,6 +34,32 @@ export interface PendingAuthorization {
   signature: Hex;
 }
 
+/** ERC-5267, which OpenZeppelin's EIP712 base implements. Lets us ask the deployed
+ *  shim for its own domain instead of hardcoding a copy that could drift. */
+const EIP5267_ABI = [
+  {
+    type: "function",
+    name: "eip712Domain",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [
+      { name: "fields", type: "bytes1" },
+      { name: "name", type: "string" },
+      { name: "version", type: "string" },
+      { name: "chainId", type: "uint256" },
+      { name: "verifyingContract", type: "address" },
+      { name: "salt", type: "bytes32" },
+      { name: "extensions", type: "uint256[]" },
+    ],
+  },
+] as const;
+
+/** The EIP-712 domain an x402 `exact` payment must be signed under. */
+export interface Eip712DomainInfo {
+  name: string;
+  version: string;
+}
+
 export interface Fxrp3009SettlementProviderOptions {
   /** Facilitator's gas-paying key. Falls back to RILL_FACILITATOR_KEY. */
   facilitatorPrivateKey?: string;
@@ -54,9 +80,10 @@ export class Fxrp3009SettlementProvider implements SettlementProvider {
   readonly mock = false;
   readonly facilitatorAddress: Hex;
 
-  private readonly pending = new Map<string, PendingAuthorization>();
+  private readonly pending = new Map<string, { auth: PendingAuthorization; expectedNonce?: Hex }>();
   private readonly fac: Fxrp3009Facilitator;
   private readonly shimAddress: Hex;
+  private domain: Eip712DomainInfo | undefined;
 
   constructor(opts: Fxrp3009SettlementProviderOptions) {
     const key = opts.facilitatorPrivateKey ?? process.env.RILL_FACILITATOR_KEY;
@@ -68,16 +95,53 @@ export class Fxrp3009SettlementProvider implements SettlementProvider {
     this.facilitatorAddress = this.fac.facilitatorAddress;
   }
 
-  /** Stash the agent's signed authorization for `sessionId`'s next tick. */
-  stage(sessionId: string, auth: PendingAuthorization): void {
-    this.pending.set(sessionId, auth);
+  /**
+   * The EIP-712 domain the shim signs under, read from the contract itself via
+   * ERC-5267 and cached for the process lifetime (it is immutable once deployed).
+   *
+   * x402's exact/EIP-3009 verifier refuses any payment whose requirements do not
+   * carry `extra.name` and `extra.version`: without them it cannot rebuild the
+   * digest the payer signed. Resource servers must therefore advertise the domain in
+   * their 402, which is exactly what apps/demo does with this value.
+   */
+  async eip712Domain(): Promise<Eip712DomainInfo> {
+    if (this.domain) return this.domain;
+    const result = (await this.fac.signer.readContract({
+      address: this.shimAddress,
+      abi: EIP5267_ABI,
+      functionName: "eip712Domain",
+    } as never)) as readonly [Hex, string, string, bigint, Hex, Hex, readonly bigint[]];
+    this.domain = { name: result[1], version: result[2] };
+    return this.domain;
+  }
+
+  /**
+   * Stash the agent's signed authorization for `sessionId`'s next tick.
+   *
+   * `expectedNonce` is the nonce the resource server put in its 402 response. Passing
+   * it binds the settlement to that exact nonce: see the check in settle() for why
+   * that matters.
+   */
+  stage(sessionId: string, auth: PendingAuthorization, expectedNonce?: Hex): void {
+    this.pending.set(sessionId, { auth, expectedNonce });
   }
 
   async settle(quote: TickQuote): Promise<SettlementResult> {
-    const auth = this.pending.get(quote.session.id);
+    const staged = this.pending.get(quote.session.id);
     this.pending.delete(quote.session.id);
-    if (!auth) {
+    if (!staged) {
       throw new Error(`no staged FXRP3009 authorization for session ${quote.session.id}, call stage() first`);
+    }
+    const { auth, expectedNonce } = staged;
+
+    // The client chooses what it signs, so it could sign a nonce other than the one
+    // quoted. Payee and value are checked below, so that cannot move money anywhere
+    // it should not go, but the nonce is what the shim emits in AuthorizationUsed and
+    // what shared/tick-nonce.ts encodes the metered duration into. Letting a client
+    // pick it freely would let it write false durations into the on-chain record the
+    // console reports from. Bind it.
+    if (expectedNonce && auth.nonce.toLowerCase() !== expectedNonce.toLowerCase()) {
+      throw new Error(`authorization nonce ${auth.nonce} does not match the nonce quoted for this tick`);
     }
 
     const payTo = quote.stream.payTo;
@@ -96,7 +160,7 @@ export class Fxrp3009SettlementProvider implements SettlementProvider {
       amount: quote.amount,
       payTo,
       maxTimeoutSeconds: 120,
-      extra: {},
+      extra: { ...(await this.eip712Domain()) },
     };
     const payload: PaymentPayload = {
       x402Version: 2,
@@ -121,8 +185,12 @@ export class Fxrp3009SettlementProvider implements SettlementProvider {
 
     const settled = await this.fac.facilitator.settle(payload, requirements);
     if (!settled.success) {
+      // Some failures happen after the transaction was already broadcast (x402 checks
+      // the receipt's Transfer event once it lands). Carrying the hash through means a
+      // failure that still moved money can be reconciled instead of disappearing.
+      const landed = settled.transaction ? ` broadcastTx=${settled.transaction}` : "";
       throw new Error(
-        `FXRP3009 settlement failed: ${settled.errorReason ?? "unknown"} ${settled.errorMessage ?? ""}`.trim()
+        `FXRP3009 settlement failed: ${settled.errorReason ?? "unknown"} ${settled.errorMessage ?? ""}${landed}`.trim()
       );
     }
 

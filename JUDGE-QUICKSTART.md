@@ -1,13 +1,27 @@
 # Judge quickstart
 
-Everything below is verified to work verbatim from a clean clone (cold-clone review passed, 2026-08-06). Total time: under 5 minutes.
+Two routes: click one link and check it against a block explorer (30 seconds), or clone and run everything (under 5 minutes). Both are below.
 
-## Prerequisites
+## The 30-second version
+
+Open **[rill-demo.vercel.app](https://rill-demo.vercel.app)**.
+
+Every figure on that page was read back from Coston2, not from the server's memory, and the page tells you exactly which addresses to check. Two things worth verifying by hand:
+
+1. **The agent has no gas.** Open [`0xBDF3866Bb0c6499d8c1dD0a4c46c0b4E6cBb3E28`](https://coston2-explorer.flare.network/address/0xBDF3866Bb0c6499d8c1dD0a4c46c0b4E6cBb3E28) on the explorer. Its C2FLR balance is zero and always has been. It has still paid for every second of stream it consumed, because the facilitator broadcasts on its behalf against a signed EIP-3009 authorization. That is the entire point of the shim.
+
+2. **The "seconds streamed" figure is on-chain, not ours.** Pick any settlement row, click through to the transaction, and look at the `AuthorizationUsed` event's `nonce`. The last 8 bytes read `524c` followed by a 6-byte big-endian millisecond count. For example [this settlement](https://coston2-explorer.flare.network/tx/0x20a1afe511de41a90130a29546c0326bfbf892bc6a59178dc9d1864823d86a92) carries a nonce ending `524c0000000029ca`: `0x29ca` = 10698ms = **10.698 seconds**, which is exactly the figure the console reports for that row. Rill packs the metered duration into the EIP-3009 nonce, which is already emitted as an indexed topic, so per-second metering data lands on-chain at no extra gas and anyone can recompute the totals without trusting us.
+
+The contract's source is [verified on the explorer](https://coston2-explorer.flare.network/address/0xf073D2f6cf681cc0E3a4d391f661a994Bd32aCFa#code).
+
+## The full version
+
+### Prerequisites
 
 - Node.js 18+ (built and tested on v24)
 - No API keys, no signup, nothing on the critical path below
 
-## 1. Clone and install
+### 1. Clone and install
 
 ```bash
 git clone <this-repo-url>
@@ -15,25 +29,27 @@ cd rill
 npm install
 ```
 
-## 2. Prove the core claim: the EIP-3009 shim works
+### 2. Prove the core claim: the EIP-3009 shim works
 
 ```bash
 npm run compile
 npm test
 ```
 
-**Expected: `12 passing`.** This is the whole thesis: `contracts/FXRP3009.sol` implementing standard `TransferWithAuthorization`/`ReceiveWithAuthorization` against a permit-funded allowance, covering replay, expiry, not-yet-valid, wrong-signer, over-spend, cancel, and both authorization paths.
+**Expected: `15 passing`.** This is the whole thesis: `contracts/FXRP3009.sol` implementing standard `TransferWithAuthorization`/`ReceiveWithAuthorization` against a permit-funded allowance, covering replay, expiry, not-yet-valid, wrong-signer, over-spend, cancel, both authorization paths, and the mirrored `Transfer` event that lets a stock x402 facilitator confirm settlement.
 
-## 3. Prove the x402 integration is real, not hand-rolled
+### 3. Prove the x402 integration is real, not hand-rolled
 
 ```bash
 npm run typecheck:services
 npm run test:services
 ```
 
-**Expected: `3 passing`.** `packages/provider/Fxrp3009SettlementProvider` calls `@x402/evm`'s actual `registerExactEvmScheme`, the same EVM "exact" scheme implementation a stock facilitator runs against USDC, not a custom verify/settle check. See `packages/provider/index.ts`.
+**Expected: `30 passing`.** `packages/provider/Fxrp3009SettlementProvider` calls `@x402/evm`'s actual `registerExactEvmScheme`, the same EVM "exact" scheme implementation a stock facilitator runs against USDC, not a custom verify/settle check. See `packages/provider/index.ts`.
 
-## 4. Run the live demo (mock settlement, no gas needed)
+Also covered here: the tick-nonce codec (`shared/tick-nonce.ts`), the chain-derived impact feed and its filtering rules (`shared/chain-impact.ts`), and the signed session tokens including the tamper cases (`shared/session-token.ts`).
+
+### 4. Run the demo locally (mock settlement, no gas needed)
 
 ```bash
 npx tsx apps/demo/server.ts
@@ -45,30 +61,42 @@ In a second terminal:
 npx tsx apps/demo/agent.ts
 ```
 
-Then open **http://localhost:8403**: a live console showing settlements land in real time, with a live XRP/USD price pulled from Flare's real FTSOv2 feed (`shared/ftso.ts`, resolved dynamically through `ContractRegistry`, not a hardcoded address).
+Then open **http://localhost:8403**. `apps/demo/agent.ts` signs a real EIP-3009 `TransferWithAuthorization` for each tick and the server settles it through the same provider from step 3. Identical code path to the live deployment, just pointed at `MockSettlementProvider` instead of a funded key.
 
-**What proves this isn't scripted:** `apps/demo/agent.ts` signs a real EIP-3009 `TransferWithAuthorization` for each tick and the server settles it through the same `Fxrp3009SettlementProvider` from step 3. This is the identical code path a live Coston2 deployment uses, just pointed at `MockSettlementProvider` instead of a funded key. Set `RILL_FACILITATOR_KEY` + `RILL_SHIM_ADDRESS` + `RILL_PAYEE_ADDRESS` to switch it to live settlement against a deployed contract.
+### 5. Point the same agent at the live deployment
 
-## 5. Live deployment: real FXRP moved on Coston2
-
-`FXRP3009` is deployed at [`0xb1a5826C3Ae8afDfB724D0DBaEEbAa4841605B86`](https://coston2-explorer.flare.network/address/0xb1a5826C3Ae8afDfB724D0DBaEEbAa4841605B86). Click through to [transaction `0xe905be786b250d1109667084448a901c769fd7abd282040d4c944b6ffb23ab90`](https://coston2-explorer.flare.network/tx/0xe905be786b250d1109667084448a901c769fd7abd282040d4c944b6ffb23ab90) to see a real EIP-3009 authorization move real FXRP to a brand-new, previously-empty address.
-
-Reproduce it yourself with a funded key:
+If you have a Coston2 key holding FXRP, the published console will show your settlements appear:
 
 ```bash
-RILL_SHIM_ADDRESS=0xb1a5826C3Ae8afDfB724D0DBaEEbAa4841605B86 \
+RILL_DEMO_URL=https://rill-demo.vercel.app \
+RILL_FACILITATOR_URL=https://rill-facilitator.vercel.app \
+RILL_CHAIN_ID=114 \
+RILL_SHIM_ADDRESS=0xf073D2f6cf681cc0E3a4d391f661a994Bd32aCFa \
+RILL_AGENT_KEY=<your key> \
+  npx tsx apps/demo/agent.ts
+```
+
+Your key needs FXRP but **no C2FLR**: gas is the facilitator's problem, which is the property being demonstrated.
+
+### 6. Or reproduce the raw on-chain proof
+
+```bash
+RILL_SHIM_ADDRESS=0xf073D2f6cf681cc0E3a4d391f661a994Bd32aCFa \
   npx hardhat run scripts/prove-live-settlement.ts --network coston2
 ```
 
 **Expected:** two successful transactions (a permit, then a transferWithAuthorization), and a printout confirming a fresh random address's FXRP balance moved from 0 to exactly the authorized amount.
 
-## What each verified number in the README means
+## Where to check each claim
 
 | Claim | Where to check it yourself |
 |---|---|
-| 12/12 contract tests | `npm test`, step 2 above |
-| 3/3 services tests | `npm run test:services`, step 3 above |
-| Real `@x402/evm` scheme, not hand-rolled | `packages/provider/index.ts`, `registerExactEvmScheme` import |
-| Live FTSO pricing | `shared/ftso.ts`, run the demo (step 4) and watch the XRP/USD figure update |
-| Real FXRP moved on Coston2 | Step 5 above, or the explorer link directly |
+| 15/15 contract tests | `npm test`, step 2 |
+| 30/30 services tests | `npm run test:services`, step 3 |
+| Real `@x402/evm` scheme, not hand-rolled | `packages/provider/index.ts`, the `registerExactEvmScheme` import |
+| Contract source matches what is deployed | [verified source on the explorer](https://coston2-explorer.flare.network/address/0xf073D2f6cf681cc0E3a4d391f661a994Bd32aCFa#code) |
+| Agent pays without ever holding gas | [agent address](https://coston2-explorer.flare.network/address/0xBDF3866Bb0c6499d8c1dD0a4c46c0b4E6cBb3E28) on the explorer: zero C2FLR |
+| Console numbers come from the chain | [provider address token transfers](https://coston2-explorer.flare.network/address/0xD7Ed634428b091eb8ead65c363D0648AC3D27051?tab=token_transfers), and `shared/chain-impact.ts` |
+| Per-second durations are on-chain | any settlement's `AuthorizationUsed` nonce, decoded per the 30-second version above |
+| Live FTSO pricing | `shared/ftso.ts`, and the XRP/USD figure on the console |
 | Smart Accounts memo encoding | `shared/smart-account-funding.ts` + its test in `test-services/` |

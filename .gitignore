@@ -3,6 +3,11 @@ dist/
 .env
 .env.*
 .throwaway-key.local
+# Demo identities: the provider that receives stream payments, and the zero-gas agent
+# that pays. Testnet only, but keys stay out of git regardless.
+.provider-key.local
+.agent-key.local
+*-key.local
 artifacts/
 cache/
 typechain-types/
@@ -17,3 +22,8 @@ deploy/facilitator/index.js
 deploy/facilitator/node_modules/
 deploy/facilitator/.vercel/
 deploy/facilitator/package-lock.json
+deploy/demo/index.js
+deploy/demo/node_modules/
+deploy/demo/.vercel/
+deploy/demo/package-lock.json
+deploy/demo/public/
