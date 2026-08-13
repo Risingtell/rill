@@ -304,11 +304,11 @@ app.get("/config", (_req, res) => {
 
 export default app;
 
-// Only bind a port when run directly. Imported as a serverless handler, the platform
-// owns the listener.
-const isDirectRun = process.argv[1] && import.meta.url === `file://${process.argv[1].replace(/\\/g, "/")}`;
-if (isDirectRun || process.env.RILL_FORCE_LISTEN === "1") {
-  const port = parseInt(process.env.PORT || "8403", 10);
-  void ensureStream().catch(() => {});
-  app.listen(port, () => console.log(`[demo] listening on :${port}`));
-}
+// Bind unconditionally, exactly as apps/facilitator does. An earlier version only
+// listened when it decided it was "run directly", comparing import.meta.url against a
+// hand-built file:// URL. That comparison is off by a slash on Windows, so the server
+// started, printed its banner and exited without ever listening, which is precisely the
+// sort of silent nothing a judge following the README would hit.
+const port = parseInt(process.env.PORT || "8403", 10);
+void ensureStream().catch(() => {});
+app.listen(port, () => console.log(`[demo] listening on :${port}`));
