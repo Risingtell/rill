@@ -10,6 +10,7 @@ Flare Summer Signal, Track 1 (Interoperable Asset Products). Full architecture r
 
 | | |
 |---|---|
+| **Demo video** | **[Watch the 3 minute demo](https://youtu.be/sfveegxtxh4)** |
 | **Demo console** | **[rill-demo.vercel.app](https://rill-demo.vercel.app)** |
 | **Facilitator** | [rill-facilitator.vercel.app](https://rill-facilitator.vercel.app) |
 | **FXRP3009 on Flare mainnet** | [`0xb1a5826C3Ae8afDfB724D0DBaEEbAa4841605B86`](https://flare-explorer.flare.network/address/0xb1a5826C3Ae8afDfB724D0DBaEEbAa4841605B86#code) (source verified, deployed against real FXRP) |
