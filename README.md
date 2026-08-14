@@ -4,6 +4,8 @@
 
 Flare Summer Signal, Track 1 (Interoperable Asset Products). Full architecture rationale, the on-chain verification behind every claim below, and the four-systems breakdown live in [`SPEC.md`](./SPEC.md).
 
+![Rill](assets/flow.png)
+
 ## Live right now
 
 | | |
@@ -16,6 +18,15 @@ Flare Summer Signal, Track 1 (Interoperable Asset Products). Full architecture r
 | **Zero-gas agents that pay** | [`0xBDF3866B...`](https://coston2-explorer.flare.network/address/0xBDF3866Bb0c6499d8c1dD0a4c46c0b4E6cBb3E28), [`0x4340c607...`](https://coston2-explorer.flare.network/address/0x4340c607BE4764C8872477381Ee2dbF6EAf58599), [`0x935BBD6a...`](https://coston2-explorer.flare.network/address/0x935BBD6a504653fD9165cc9b5b8bA6B7141f7aF6) |
 
 Open the console and every number on it was read back from Coston2, not from the server's memory. Then check any agent address: each holds FXRP and **exactly zero C2FLR**, and each has still paid for every second of stream it consumed. That is the property the whole project exists to demonstrate.
+
+**Install the client:** `npm install fxrp3009` ([package README](./packages/sdk/README.md)) and pay
+for any x402-metered resource in FXRP while holding no gas token:
+
+```ts
+const client = new Fxrp3009Client({ account, chainId: 114, facilitatorUrl });
+await client.openSession({ budget: 1_000_000n });
+const res = await client.fetchPaid("https://provider.example/stream", { method: "POST" });
+```
 
 Run `npm run verify` to re-measure all of it yourself in one command: test counts, whether both services are up, the on-chain settlement totals, and the agent's gas balance. Nothing in this README is a number typed in by hand.
 
@@ -47,6 +58,7 @@ FXRP already has a gasless allowance mechanism (`permit`), it just doesn't speak
 | `apps/facilitator` (standalone x402 facilitator) | Live: `/health`, `/supported`, `/verify`, `/settle`, `/sponsor-permit`; asset-allowlisted so it can only ever settle FXRP3009 |
 | `apps/demo` (metered stream + agent + console) | **Live and public**, running real settlements end to end against Coston2 |
 | `shared/` services layer | Unit tests plus integration tests driving the real HTTP surface (`npm run test:services`) |
+| `fxrp3009` npm package | Installable client + CLI + server pieces, with the payer flow proven live from a clean install |
 | FTSOv2 pricing | **Live-verified against Coston2**: resolves `FtsoV2` through `ContractRegistry`, not a hardcoded address (one doc's copy of that address was silently corrupted by one character; verifying on-chain caught it) |
 | Smart Accounts funding | Round-tripped through Flare's own `@flarenetwork/smart-accounts-encoder`, with the `executeUserOp` entry point **confirmed against Flare's verified `PersonalAccount` contract on-chain** |
 

@@ -10,7 +10,8 @@
     "typecheck:services": "tsc --noEmit -p tsconfig.services.json",
     "build:facilitator": "esbuild apps/facilitator/index.ts --bundle --platform=node --target=node20 --format=esm --packages=external --outfile=deploy/facilitator/index.js",
     "build:demo": "esbuild apps/demo/server.ts --bundle --platform=node --target=node20 --format=esm --packages=external --outfile=deploy/demo/index.js && node -e \"require('fs').cpSync('apps/demo/public','deploy/demo/public',{recursive:true})\"",
-    "verify": "tsx scripts/verify.mts"
+    "verify": "tsx scripts/verify.mts",
+    "build:sdk": "esbuild packages/sdk/src/index.ts --bundle --platform=node --target=node18 --format=esm --external:viem --external:meter402 --external:@x402/core --external:@x402/evm --outfile=packages/sdk/dist/index.js && esbuild packages/sdk/src/cli.ts --bundle --platform=node --target=node18 --format=esm --external:viem --outfile=packages/sdk/dist/cli.js && tsc -p packages/sdk/tsconfig.json"
   },
   "keywords": [
     "flare",
@@ -33,16 +34,32 @@
     "viem": "^2.55.10"
   },
   "devDependencies": {
-    "@nomicfoundation/hardhat-toolbox": "^5.0.0",
+    "@nomicfoundation/hardhat-chai-matchers": "^2.1.0",
+    "@nomicfoundation/hardhat-ethers": "^3.1.0",
+    "@nomicfoundation/hardhat-verify": "^2.1.0",
     "@openzeppelin/contracts": "^5.6.1",
+    "@typechain/ethers-v6": "^0.5.1",
+    "@typechain/hardhat": "^9.1.0",
+    "@types/chai": "^4.3.20",
     "@types/cors": "^2.8.19",
     "@types/express": "^4.17.25",
+    "@types/mocha": "^10.0.10",
     "@types/node": "^26.1.2",
+    "chai": "^4.5.0",
     "dotenv": "^17.4.2",
     "esbuild": "^0.28.1",
+    "ethers": "^6.15.0",
     "hardhat": "^2.29.0",
     "ts-node": "^10.9.2",
     "tsx": "^4.23.5",
+    "typechain": "^8.3.2",
     "typescript": "^5.9.3"
+  },
+  "overrides": {
+    "lodash": "^4.18.1",
+    "serialize-javascript": "^7.1.0",
+    "undici": "^6.28.0",
+    "tmp": "^0.2.7",
+    "adm-zip": "^0.6.0"
   }
 }
