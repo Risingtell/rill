@@ -33,18 +33,30 @@ import { encodeTickNonce } from "../../shared/tick-nonce.js";
 import { resolveSessionSecret, signToken, verifyToken } from "../../shared/session-token.js";
 import { fetchChainImpact, type ChainImpact } from "../../shared/chain-impact.js";
 
-const CHAIN_ID = (parseInt(process.env.RILL_CHAIN_ID || "114", 10) === 14 ? 14 : 114) as 114 | 14;
-const SHIM_ADDRESS = process.env.RILL_SHIM_ADDRESS as Hex | undefined;
-const PAY_TO = process.env.RILL_PAYEE_ADDRESS as Hex | undefined;
+/**
+ * Read an env var, treating empty or whitespace-only as unset.
+ *
+ * `??` only falls back on null/undefined, so an env var set to the empty string (a
+ * blank line in a .env, a CI default, a shell that exports it unset) flows through as
+ * a real value. That produced a 402 advertising `asset: ""`, which no client can pay.
+ */
+function env(name: string): string | undefined {
+  const v = process.env[name];
+  return v && v.trim() !== "" ? v.trim() : undefined;
+}
+
+const CHAIN_ID = (parseInt(env("RILL_CHAIN_ID") || "114", 10) === 14 ? 14 : 114) as 114 | 14;
+const SHIM_ADDRESS = env("RILL_SHIM_ADDRESS") as Hex | undefined;
+const PAY_TO = env("RILL_PAYEE_ADDRESS") as Hex | undefined;
 const DEFAULT_PAY_TO: Hex = PAY_TO ?? "0x000000000000000000000000000000000000dEaD";
-const USD_PER_SECOND = process.env.RILL_USD_PER_SECOND || "0.0001"; // $0.36/hr
+const USD_PER_SECOND = env("RILL_USD_PER_SECOND") || "0.0001"; // $0.36/hr
 const STREAM_ID = "xrp-usd-feed";
 const TICK_WINDOW_SECONDS = 120;
 const PRICE_TTL_MS = 60_000;
 const IMPACT_TTL_MS = 5_000;
 
 const chain = CHAIN_ID === 114 ? coston2 : flare;
-const publicClient = createPublicClient({ chain, transport: viemHttp(process.env.RILL_RPC_URL) });
+const publicClient = createPublicClient({ chain, transport: viemHttp(env("RILL_RPC_URL")) });
 
 const store = new MemoryStore();
 const meter = new StreamingMeter(store, { payTo: DEFAULT_PAY_TO, maxTickSeconds: TICK_WINDOW_SECONDS });

@@ -193,9 +193,11 @@ export function facilitatorOptionsFromEnv(): FacilitatorRouterOptions {
       .filter(Boolean)
   );
 
-  const key = process.env.RILL_FACILITATOR_KEY;
+  // Trimmed, and empty treated as unset: a shim address carrying a stray newline or a
+  // BOM silently fails the asset allowlist on every settlement instead of erroring here.
+  const key = process.env.RILL_FACILITATOR_KEY?.trim();
   if (!key) throw new Error("RILL_FACILITATOR_KEY is required to run the facilitator.");
-  const shimAddress = process.env.RILL_SHIM_ADDRESS;
+  const shimAddress = process.env.RILL_SHIM_ADDRESS?.trim();
   if (!shimAddress) throw new Error("RILL_SHIM_ADDRESS is required: the deployed FXRP3009 contract address.");
 
   return {

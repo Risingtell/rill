@@ -273,3 +273,15 @@ test("serves impact from memory in mock mode, flagged as such", async () => {
   assert.equal(impact.source, "memory");
   assert.equal(impact.mock, true);
 });
+
+test("an env var set to empty behaves as unset, not as a real value", async () => {
+  // This is the bug the cold-clone pass found: `??` does not fall back on an empty
+  // string, so RILL_SHIM_ADDRESS="" produced a 402 advertising asset:"" that no client
+  // could pay. Empty env vars are ordinary (a blank .env line, a CI default), so the
+  // 402 must stay well-formed regardless.
+  const token = await openSession();
+  const accept = await quote(token);
+  assert.ok(accept.asset, "402 must always name an asset");
+  assert.match(accept.asset, /^0x[0-9a-fA-F]{40}$/, "and it must be a real address");
+  assert.match(accept.payTo, /^0x[0-9a-fA-F]{40}$/);
+});

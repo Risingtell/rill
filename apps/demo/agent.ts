@@ -15,16 +15,28 @@ import { createPublicClient, http as viemHttp, type Hex } from "viem";
 import { privateKeyToAccount, generatePrivateKey } from "viem/accounts";
 import { coston2, flare, FXRP_ADDRESS } from "../../shared/flare-chains.js";
 
-const CHAIN_ID = (parseInt(process.env.RILL_CHAIN_ID || "114", 10) === 14 ? 14 : 114) as 114 | 14;
-const DEMO_URL = process.env.RILL_DEMO_URL || "http://localhost:8403";
-const FACILITATOR_URL = process.env.RILL_FACILITATOR_URL || "http://localhost:8402";
-const SHIM_ADDRESS = process.env.RILL_SHIM_ADDRESS as Hex | undefined;
+/**
+ * Read an env var, treating empty or whitespace-only as unset.
+ *
+ * `??` only falls back on null/undefined, so an env var set to the empty string (a
+ * blank line in a .env, a CI default, a shell that exports it unset) flows through as
+ * a real value. That produced a 402 advertising `asset: ""`, which no client can pay.
+ */
+function env(name: string): string | undefined {
+  const v = process.env[name];
+  return v && v.trim() !== "" ? v.trim() : undefined;
+}
+
+const CHAIN_ID = (parseInt(env("RILL_CHAIN_ID") || "114", 10) === 14 ? 14 : 114) as 114 | 14;
+const DEMO_URL = env("RILL_DEMO_URL") || "http://localhost:8403";
+const FACILITATOR_URL = env("RILL_FACILITATOR_URL") || "http://localhost:8402";
+const SHIM_ADDRESS = env("RILL_SHIM_ADDRESS") as Hex | undefined;
 const TICKS = parseInt(process.env.RILL_AGENT_TICKS || "5", 10);
 const TICK_INTERVAL_MS = parseInt(process.env.RILL_AGENT_TICK_MS || "3000", 10);
 const SESSION_BUDGET = process.env.RILL_SESSION_BUDGET || "1000000"; // 1.0 FXRP at 6dp
 
 const chain = CHAIN_ID === 114 ? coston2 : flare;
-const publicClient = createPublicClient({ chain, transport: viemHttp(process.env.RILL_RPC_URL) });
+const publicClient = createPublicClient({ chain, transport: viemHttp(env("RILL_RPC_URL")) });
 
 const PERMIT_TYPES = {
   Permit: [
@@ -160,7 +172,7 @@ async function tick(account: ReturnType<typeof privateKeyToAccount>, sessionId: 
 }
 
 async function main() {
-  const key = process.env.RILL_AGENT_KEY;
+  const key = env("RILL_AGENT_KEY");
   const account = privateKeyToAccount((key ? (key.startsWith("0x") ? key : `0x${key}`) : generatePrivateKey()) as Hex);
   console.log(`[agent] address: ${account.address}`);
 
