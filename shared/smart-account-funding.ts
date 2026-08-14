@@ -15,14 +15,19 @@
  *     accountGasLimits/preVerificationGas/gasFees/paymasterAndData/signature) are both
  *     taken directly from the package's shipped .d.ts and its own README example.
  *
- * What is NOT verified, and is intentionally left as a caller-supplied parameter
- * rather than guessed: the exact ABI of the Flare smart account's own
- * `executeUserOp(Call[])` entry point (its Call{target,value,data} struct and
- * selector). Flare has not published that ABI anywhere this session could confirm on
- * a live testnet call, so this module does not fabricate it. `buildPermitCallData`
- * gives you the correctly-encoded FXRP `permit()` call to put in that Call array once
- * you have the real ABI. Guessing this rather than leaving the seam open would risk
- * producing a memo that looks valid but silently fails on-chain.
+ *   - The `executeUserOp(Call[])` entry point, CONFIRMED ON-CHAIN 2026-08-14 rather
+ *     than taken from a doc. Route: the on-chain ContractRegistry resolves
+ *     `MasterAccountController` to 0x434936d47503353f06750Db1A444DBDC5F0AD37c (the
+ *     same address on Coston2 and Flare mainnet). That is an EIP-2535 diamond; its
+ *     `UserOperationExecuted(address indexed personalAccount, uint256 nonce)` logs
+ *     name live personal accounts. One of those (0xb21BE347eb2036aD906a7352fA133b2FB73e6668)
+ *     is an EIP-1967 beacon proxy onto implementation
+ *     0xe900cf0C3f1320816700c669B002835aCc9A93A6, whose source is verified on the
+ *     explorer as `PersonalAccount` and exposes exactly:
+ *         function executeUserOp(Call[] calldata _calls) external payable;
+ *         struct Call { address target; uint256 value; bytes data; }
+ *     An earlier pass left this as a caller-supplied seam because it could not be
+ *     confirmed. It can be, so it no longer is.
  */
 
 import { type Hex, encodeAbiParameters, encodeFunctionData } from "viem";
@@ -49,7 +54,7 @@ const PACKED_USER_OP_TUPLE = [
 export interface PackedUserOperationFields {
   sender: Hex;
   nonce: bigint;
-  /** The batch-execute calldata, e.g. from executeUserOp(Call[]) once that ABI is confirmed. */
+  /** The batch-execute calldata, normally from buildExecuteUserOpCallData(). */
   callData: Hex;
   initCode?: Hex;
   accountGasLimits?: Hex;
@@ -79,11 +84,53 @@ export function encodePackedUserOperation(fields: PackedUserOperationFields): He
 }
 
 /**
+ * The Flare smart account's batch-execute entry point, confirmed against the verified
+ * `PersonalAccount` implementation on Coston2 (see the module header for the trail).
+ */
+export const EXECUTE_USER_OP_ABI = [
+  {
+    type: "function",
+    name: "executeUserOp",
+    stateMutability: "payable",
+    inputs: [
+      {
+        name: "_calls",
+        type: "tuple[]",
+        components: [
+          { name: "target", type: "address" },
+          { name: "value", type: "uint256" },
+          { name: "data", type: "bytes" },
+        ],
+      },
+    ],
+    outputs: [],
+  },
+] as const;
+
+/** One entry in an executeUserOp batch. */
+export interface SmartAccountCall {
+  target: Hex;
+  value?: bigint;
+  data: Hex;
+}
+
+/**
+ * Encode a batch of calls for the smart account to run once it is funded. This is the
+ * `callData` field of the PackedUserOperation that rides inside the XRPL memo.
+ */
+export function buildExecuteUserOpCallData(calls: readonly SmartAccountCall[]): Hex {
+  return encodeFunctionData({
+    abi: EXECUTE_USER_OP_ABI,
+    functionName: "executeUserOp",
+    args: [calls.map((c) => ({ target: c.target, value: c.value ?? 0n, data: c.data }))],
+  });
+}
+
+/**
  * FXRP.permit() calldata for a smart account to approve FXRP3009's allowance the
  * instant its balance is minted: the "one permit (gasless)" step in SPEC.md's flow
- * diagram, riding the same XRPL payment that funded the account. Plug the result into
- * whichever Call{target,value,data} entry your confirmed executeUserOp ABI expects,
- * target = the FXRP token address.
+ * diagram, riding the same XRPL payment that funded the account. Pass the result to
+ * buildExecuteUserOpCallData() with target = the FXRP token address.
  */
 export function buildPermitCallData(auth: {
   owner: Hex;

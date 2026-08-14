@@ -12,9 +12,11 @@ Flare Summer Signal, Track 1 (Interoperable Asset Products). Full architecture r
 | **Facilitator** | [rill-facilitator.vercel.app](https://rill-facilitator.vercel.app) |
 | **FXRP3009 contract** | [`0xf073D2f6cf681cc0E3a4d391f661a994Bd32aCFa`](https://coston2-explorer.flare.network/address/0xf073D2f6cf681cc0E3a4d391f661a994Bd32aCFa#code) (source verified on the explorer) |
 | **Provider receiving payments** | [`0xD7Ed634428b091eb8ead65c363D0648AC3D27051`](https://coston2-explorer.flare.network/address/0xD7Ed634428b091eb8ead65c363D0648AC3D27051?tab=token_transfers) |
-| **Zero-gas agent that pays** | [`0xBDF3866Bb0c6499d8c1dD0a4c46c0b4E6cBb3E28`](https://coston2-explorer.flare.network/address/0xBDF3866Bb0c6499d8c1dD0a4c46c0b4E6cBb3E28) |
+| **Zero-gas agents that pay** | [`0xBDF3866B...`](https://coston2-explorer.flare.network/address/0xBDF3866Bb0c6499d8c1dD0a4c46c0b4E6cBb3E28), [`0x4340c607...`](https://coston2-explorer.flare.network/address/0x4340c607BE4764C8872477381Ee2dbF6EAf58599), [`0x935BBD6a...`](https://coston2-explorer.flare.network/address/0x935BBD6a504653fD9165cc9b5b8bA6B7141f7aF6) |
 
-Open the console and every number on it was read back from Coston2, not from the server's memory. Then check the agent address: it holds FXRP and **exactly zero C2FLR**, and it has still paid for every second of stream it consumed. That is the property the whole project exists to demonstrate.
+Open the console and every number on it was read back from Coston2, not from the server's memory. Then check any agent address: each holds FXRP and **exactly zero C2FLR**, and each has still paid for every second of stream it consumed. That is the property the whole project exists to demonstrate.
+
+Run `npm run verify` to re-measure all of it yourself in one command: test counts, whether both services are up, the on-chain settlement totals, and the agent's gas balance. Nothing in this README is a number typed in by hand.
 
 ## The gap, verified on-chain
 
@@ -39,13 +41,13 @@ FXRP already has a gasless allowance mechanism (`permit`), it just doesn't speak
 
 | Piece | Status |
 |---|---|
-| `contracts/FXRP3009.sol` | **15/15 tests passing**, deployed and **source-verified** on Coston2, with real permit + EIP-3009 settlements proven on-chain |
+| `contracts/FXRP3009.sol` | Deployed and **source-verified** on Coston2, with real permit + EIP-3009 settlements proven on-chain. Test count via `npm test` |
 | `packages/provider/Fxrp3009SettlementProvider` | meter402's `SettlementProvider`, backed by `@x402/evm`'s **real, unmodified** EIP-3009 "exact" scheme, not a hand-rolled check |
 | `apps/facilitator` (standalone x402 facilitator) | Live: `/health`, `/supported`, `/verify`, `/settle`, `/sponsor-permit`; asset-allowlisted so it can only ever settle FXRP3009 |
 | `apps/demo` (metered stream + agent + console) | **Live and public**, running real settlements end to end against Coston2 |
-| `shared/` services layer | **30/30 tests passing** (`npm run test:services`) |
+| `shared/` services layer | Unit tests plus integration tests driving the real HTTP surface (`npm run test:services`) |
 | FTSOv2 pricing | **Live-verified against Coston2**: resolves `FtsoV2` through `ContractRegistry`, not a hardcoded address (one doc's copy of that address was silently corrupted by one character; verifying on-chain caught it) |
-| Smart Accounts funding memo | Round-tripped through Flare's own `@flarenetwork/smart-accounts-encoder`, see honest limitations below |
+| Smart Accounts funding | Round-tripped through Flare's own `@flarenetwork/smart-accounts-encoder`, with the `executeUserOp` entry point **confirmed against Flare's verified `PersonalAccount` contract on-chain** |
 
 ## The four Flare systems, each load-bearing
 
@@ -57,7 +59,7 @@ FXRP already has a gasless allowance mechanism (`permit`), it just doesn't speak
 ## Honest limitations
 
 - **The shim emits its own `Transfer` event.** A standard x402 facilitator confirms settlement by scanning the receipt for an ERC-20 `Transfer` emitted by the asset address it was handed. The real movement is emitted by FXRP, not by the shim, so without a mirrored event a perfectly valid payment is rejected as `invalid_exact_evm_transfer_event_mismatch`. The shim therefore re-emits the same movement. It is a log only: it mints nothing, custodies nothing, and every balance still lives in the FXRP contract. This is a deliberate trade to keep unmodified x402 facilitators working, and it is worth knowing that a block explorer may index the shim as if it were a token.
-- **Smart Accounts funding is encoding-complete, not execution-complete.** `MemoFieldUserOpCustomInstruction` (opcode `0xFF`) is confirmed as part of Flare's *current* minting path, not the deprecated CollateralReservation instructions, and the memo built by `shared/smart-account-funding.ts` round-trips correctly through Flare's own encoder. What's intentionally left open: the exact ABI of the Flare smart account's own `executeUserOp(Call[])` entry point isn't published anywhere this project could confirm against a live call, so it's a caller-supplied parameter rather than a guess.
+- **Smart Accounts funding is built and encoded, but not exercised against a live XRPL payment.** Every piece is confirmed rather than assumed: opcode `0xFF` is part of Flare's current minting path, the memo round-trips through Flare's own encoder, and `executeUserOp(Call[])` with `Call{target,value,data}` was read off Flare's verified `PersonalAccount` implementation on Coston2 (resolved from the on-chain ContractRegistry, see the trail in `shared/smart-account-funding.ts`). What has not happened is an actual XRP payment on XRPL testnet driving a mint end to end, which needs a funded XRPL account and Flare's Core Vault address for the target network.
 - **Coston2 testnet only.** The contract is unaudited and the keys behind the live demo are throwaway testnet keys. Nothing here should hold value.
 - **FTSO `getFeedById` is the testnet (`view`) signature.** Mainnet's is `payable` and needs `FeeCalculator` fee handling, out of scope for this Coston2-only demo.
 - **Hardhat 2's own dependency tree carries real advisories**, all in dev/build tooling, not in the shipped `apps/facilitator` or `apps/demo` runtime. Traced individually in [`SECURITY.md`](./SECURITY.md) rather than waved away by severity label. The real fix is Hardhat 3, a breaking major version this project has not taken this close to submission.

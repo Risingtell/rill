@@ -9,7 +9,8 @@
     "test:services": "tsx --test test-services/*.test.ts",
     "typecheck:services": "tsc --noEmit -p tsconfig.services.json",
     "build:facilitator": "esbuild apps/facilitator/index.ts --bundle --platform=node --target=node20 --format=esm --packages=external --outfile=deploy/facilitator/index.js",
-    "build:demo": "esbuild apps/demo/server.ts --bundle --platform=node --target=node20 --format=esm --packages=external --outfile=deploy/demo/index.js && node -e \"require('fs').cpSync('apps/demo/public','deploy/demo/public',{recursive:true})\""
+    "build:demo": "esbuild apps/demo/server.ts --bundle --platform=node --target=node20 --format=esm --packages=external --outfile=deploy/demo/index.js && node -e \"require('fs').cpSync('apps/demo/public','deploy/demo/public',{recursive:true})\"",
+    "verify": "tsx scripts/verify.mts"
   },
   "keywords": [
     "flare",
