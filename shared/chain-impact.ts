@@ -35,7 +35,7 @@ export interface ChainImpactOptions {
   fxrpAddress: Hex;
   /** Most recent settlements to return in `recent`. */
   recentLimit?: number;
-  /** Pages of explorer results to walk. One page is 50 transfers. */
+  /** Pages of explorer results to walk. One page is 50 items. */
   maxPages?: number;
 }
 
@@ -61,6 +61,9 @@ export interface ChainImpact {
   network: string;
   mock: false;
   source: "chain";
+  /** True when the explorer had more history than we walked, so totals are a floor
+   *  rather than the complete picture. Surfaced instead of silently under-reporting. */
+  truncated: boolean;
   /** Everything below is reconstructed from these, so judges can re-run the queries. */
   verifiedFrom: { explorer: string; payee: string; shim: string; token: string };
   totals: {
@@ -101,21 +104,30 @@ async function getJson<T>(url: string): Promise<T> {
   return (await res.json()) as T;
 }
 
-/** Walk paginated Blockscout results up to `maxPages`. */
-async function getPaged<T>(baseUrl: string, maxPages: number): Promise<T[]> {
+/**
+ * Walk paginated Blockscout results up to `maxPages`.
+ *
+ * Reports whether it stopped early. That matters because the join below drops any
+ * transfer whose authorization log was not fetched: without a truncation signal, going
+ * past the page budget would quietly shrink the reported totals rather than fail, and
+ * a console that under-reports with total confidence is worse than one that says so.
+ */
+async function getPaged<T>(baseUrl: string, maxPages: number): Promise<{ items: T[]; truncated: boolean }> {
   const items: T[] = [];
   let next: Record<string, string> | undefined;
+  let truncated = false;
 
   for (let page = 0; page < maxPages; page++) {
     const qs = new URLSearchParams(next ?? {}).toString();
     const url = qs ? `${baseUrl}${baseUrl.includes("?") ? "&" : "?"}${qs}` : baseUrl;
     const body = await getJson<{ items?: T[]; next_page_params?: Record<string, string> | null }>(url);
     items.push(...(body.items ?? []));
-    if (!body.next_page_params) break;
+    if (!body.next_page_params) return { items, truncated: false };
     next = body.next_page_params;
+    truncated = true;
   }
 
-  return items;
+  return { items, truncated };
 }
 
 function formatUnits(value: string, decimals: number): string {
@@ -136,14 +148,23 @@ function formatUnits(value: string, decimals: number): string {
 export async function fetchChainImpact(opts: ChainImpactOptions): Promise<ChainImpact> {
   const { chainId, payee, shimAddress, fxrpAddress } = opts;
   const recentLimit = opts.recentLimit ?? 25;
-  const maxPages = opts.maxPages ?? 4;
+  const maxPages = opts.maxPages ?? 10;
   const base = explorerBase(chainId);
   const network = chainId === 114 ? "eip155:114" : "eip155:14";
 
-  const [transfers, logs] = await Promise.all([
-    getPaged<TransferItem>(`${base}/api/v2/addresses/${payee}/token-transfers?type=ERC-20`, maxPages),
+  // `token=` is filtered server-side, which matters more than it looks: the shim mirrors
+  // every movement with its own Transfer event (so stock x402 facilitators can confirm
+  // settlement), and the explorer indexes the shim as if it were a token. Without this
+  // filter half of every page is that mirror, halving the real history each page holds.
+  // The logs endpoint has no equivalent topic filter (tested: topic0= returns nothing),
+  // so its Transfer entries are still filtered client-side below.
+  const [transferPage, logPage] = await Promise.all([
+    getPaged<TransferItem>(`${base}/api/v2/addresses/${payee}/token-transfers?type=ERC-20&token=${fxrpAddress}`, maxPages),
     getPaged<LogItem>(`${base}/api/v2/addresses/${shimAddress}/logs`, maxPages),
   ]);
+  const transfers = transferPage.items;
+  const logs = logPage.items;
+  const truncated = transferPage.truncated || logPage.truncated;
 
   // tx hash -> nonce, from the shim's own AuthorizationUsed events.
   const nonceByTx = new Map<string, string>();
@@ -199,6 +220,7 @@ export async function fetchChainImpact(opts: ChainImpactOptions): Promise<ChainI
     network,
     mock: false,
     source: "chain",
+    truncated,
     verifiedFrom: { explorer: base, payee, shim: shimAddress, token: fxrpAddress },
     totals: {
       settlements: settlements.length,

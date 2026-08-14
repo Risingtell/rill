@@ -36,6 +36,16 @@ export const FXRP_ADDRESS: Record<114 | 14, `0x${string}`> = {
   14: "0xAd552A648C74D49E10027AB8a618A3ad4901c5bE",
 };
 
+/**
+ * Deployed FXRP3009 shims, source-verified on each network's explorer.
+ * Coston2 carries the live demo's settlement history; mainnet is deployed against real
+ * FXRP, which has the same EIP-3009 gap (re-verified on-chain 2026-08-14).
+ */
+export const FXRP3009_ADDRESS: Record<114 | 14, `0x${string}`> = {
+  114: "0xf073D2f6cf681cc0E3a4d391f661a994Bd32aCFa",
+  14: "0xb1a5826C3Ae8afDfB724D0DBaEEbAa4841605B86",
+};
+
 export function explorerTxUrl(chainId: 114 | 14, txHash: string): string {
   const chain = chainId === 114 ? coston2 : flare;
   return `${chain.blockExplorers.default.url}/tx/${txHash}`;

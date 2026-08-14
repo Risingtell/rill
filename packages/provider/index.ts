@@ -144,6 +144,14 @@ export class Fxrp3009SettlementProvider implements SettlementProvider {
       throw new Error(`authorization nonce ${auth.nonce} does not match the nonce quoted for this tick`);
     }
 
+    // The session says who is streaming; the authorization says who pays. If those can
+    // differ, the recorded agent and the address that actually moved funds drift apart,
+    // and a session can be settled with an authorization harvested from someone else.
+    const agent = quote.session.agent;
+    if (agent && agent.startsWith("0x") && auth.from.toLowerCase() !== agent.toLowerCase()) {
+      throw new Error(`authorization payer ${auth.from} does not match session agent ${agent}`);
+    }
+
     const payTo = quote.stream.payTo;
     if (!payTo) throw new Error(`stream ${quote.stream.id} has no payTo address`);
     if (auth.to.toLowerCase() !== payTo.toLowerCase()) {

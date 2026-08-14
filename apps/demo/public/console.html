@@ -241,7 +241,9 @@
       document.getElementById("settlements").textContent = impact.totals.settlements;
       document.getElementById("settlementsSub").textContent = impact.stale
         ? "explorer lagging, showing last good read"
-        : (impact.source === "chain" ? "read from the block explorer" : "in-memory (mock mode)");
+        : impact.truncated
+          ? "at least this many (more history than one read returns)"
+          : (impact.source === "chain" ? "read from the block explorer" : "in-memory (mock mode)");
 
       const paid = impact.totals.totalPaidFormatted ?? impact.totals.totalPaid;
       document.getElementById("totalPaid").textContent = paid + " " + (impact.totals.asset || "");

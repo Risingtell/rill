@@ -32,6 +32,10 @@ export interface FacilitatorRouterOptions {
 
 const lower = (s: string) => s.trim().toLowerCase();
 
+const BALANCE_OF_ABI = [
+  { type: "function", name: "balanceOf", stateMutability: "view", inputs: [{ type: "address" }], outputs: [{ type: "uint256" }] },
+] as const;
+
 interface Requirements {
   asset?: string;
   payTo?: string;
@@ -132,12 +136,33 @@ export function createFacilitatorRouter(opts: FacilitatorRouterOptions): { route
    * off-chain (free); this relays it on-chain using the facilitator's own gas, exactly
    * like /settle relays a tick authorization. Always targets real FXRP for this
    * facilitator's configured chain, never a client-supplied token address.
+   *
+   * This route has to stay open for the published demo to work (any agent can point at
+   * it), which makes it the one endpoint that spends the facilitator's gas on behalf of
+   * a caller it has never met. /settle cannot be abused that way because settling needs
+   * an authorization signed by someone with a real balance and allowance, but a permit
+   * is valid from ANY keypair, including empty ones generated in a loop. So require the
+   * owner to actually hold FXRP: legitimate payers always do (they are about to stream
+   * against it), and it makes gas-draining cost an attacker real tokens per address.
    */
   router.post("/sponsor-permit", async (req: Request, res: Response) => {
     try {
       const { owner, value, deadline, v, r, s } = req.body ?? {};
       if (!owner || !value || !deadline || v === undefined || !r || !s) {
         return res.status(400).json({ success: false, errorMessage: "owner, value, deadline, v, r, s are required" });
+      }
+
+      const balance = (await fac.signer.readContract({
+        address: FXRP_ADDRESS[fac.chainId],
+        abi: BALANCE_OF_ABI,
+        functionName: "balanceOf",
+        args: [owner as Hex],
+      } as never)) as bigint;
+      if (balance === 0n) {
+        return res.status(402).json({
+          success: false,
+          errorMessage: "owner holds no FXRP: this facilitator only sponsors permits for addresses that can actually pay",
+        });
       }
       const txHash = await sponsorPermit(fac.signer, {
         token: FXRP_ADDRESS[fac.chainId],
