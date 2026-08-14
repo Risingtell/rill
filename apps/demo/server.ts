@@ -194,7 +194,13 @@ app.post("/sessions/:id/tick", async (req: Request, res: Response) => {
       // x402's exact/EIP-3009 scheme requires the asset's EIP-712 domain name and
       // version in `extra`, so a client that has never heard of Rill can rebuild the
       // digest and sign. Read from the shim itself rather than hardcoded here.
-      const domain = live && provider instanceof Fxrp3009SettlementProvider ? await provider.eip712Domain() : undefined;
+      // In mock mode there is no deployed shim to ask, so state the domain FXRP3009's
+      // constructor sets. A 402 should always carry it either way: the client contract
+      // is uniform, and mock settlement does not check signatures regardless.
+      const domain =
+        live && provider instanceof Fxrp3009SettlementProvider
+          ? await provider.eip712Domain()
+          : { name: "FXRP3009", version: "1" };
       return res.status(402).json({
         x402Version: 2,
         accepts: [
@@ -206,7 +212,7 @@ app.post("/sessions/:id/tick", async (req: Request, res: Response) => {
             payTo: quote.stream.payTo ?? DEFAULT_PAY_TO,
             maxTimeoutSeconds: TICK_WINDOW_SECONDS,
             extra: {
-              ...(domain ?? {}),
+              ...domain,
               nonce,
               validAfter: "0",
               validBefore: String(Math.floor(quote.at / 1000) + TICK_WINDOW_SECONDS),
