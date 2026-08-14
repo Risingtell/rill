@@ -122,6 +122,18 @@ RILL_AGENT_KEY=<a key holding FXRP and no C2FLR> \
   npx tsx apps/demo/agent.ts
 ```
 
+PowerShell has no inline variable prefix and will read the line above as a command
+name, so on Windows set them first:
+
+```powershell
+$env:RILL_DEMO_URL = "https://rill-demo.vercel.app"
+$env:RILL_FACILITATOR_URL = "https://rill-facilitator.vercel.app"
+$env:RILL_CHAIN_ID = "114"
+$env:RILL_SHIM_ADDRESS = "0xf073D2f6cf681cc0E3a4d391f661a994Bd32aCFa"
+$env:RILL_AGENT_KEY = "<a key holding FXRP and no C2FLR>"
+npx tsx apps/demo/agent.ts
+```
+
 ### Reproduce the on-chain proof directly
 
 Needs a funded key, set as `PRIVATE_KEY` or in `.throwaway-key.local`:
